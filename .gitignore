@@ -1,0 +1,6 @@
+node_modules
+dist
+*.log
+.env
+# runbook/handoff docs stay local — they reference private infra (the engine repo committed spec+plan but no handoff)
+docs/superpowers/*-handoff.md

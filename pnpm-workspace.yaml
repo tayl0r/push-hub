@@ -1,0 +1,3 @@
+allowBuilds:
+  "@tsteil/push-service": true
+  esbuild: true
