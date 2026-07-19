@@ -57,6 +57,20 @@ describe('POST /v1/send', () => {
     expect((await tokensForUsers(db, 'team-comm', ['u1'])).map(r => r.token)).toEqual(['live'])
   })
 
+  it('never deletes a foreign-tenant row, even if the engine returns its id as an invalid ref', async () => {
+    await registerToken(db, 'team-comm', 'u1', 'live', 'android')
+    await registerToken(db, 'setpiece', 'u9', 'foreign', 'android')
+    const [live] = await tokensForUsers(db, 'team-comm', ['u1'])
+    const [foreign] = await tokensForUsers(db, 'setpiece', ['u9'])
+    // engine misbehaves: reports an "invalid" result for a ref this request never fetched/sent
+    engine.send.mockResolvedValueOnce([
+      { ref: live.id, token: 'live', provider: 'fcm', status: 'delivered' },
+      { ref: foreign.id, token: 'foreign', provider: 'fcm', status: 'invalid' },
+    ])
+    await inject({ to: 'u1', title: 'x', body: 'y' })
+    expect(await tokensForUsers(db, 'setpiece', ['u9'])).toHaveLength(1)
+  })
+
   it('maps failed/invalid results to error tickets via error ?? status', async () => {
     await registerToken(db, 'team-comm', 'u1', 'dead', 'android')
     await registerToken(db, 'team-comm', 'u1', 'live', 'android')

@@ -18,7 +18,7 @@ export function tokenRoutes(app: FastifyInstance, deps: { db: any; tenants: Map<
 
   app.delete('/v1/tokens', { preHandler: requireTenant(deps.tenants) }, async (req, reply) => {
     const parsed = removeBody.safeParse(req.body)
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid body' })
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: parsed.error.flatten() })
     const deleted = await removeToken(deps.db, req.tenant.slug, parsed.data.token)
     return reply.send({ ok: true, deleted })
   })

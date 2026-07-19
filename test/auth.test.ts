@@ -20,6 +20,10 @@ describe('requireTenant', () => {
     const res = await appWith().inject({ method: 'GET', url: '/x', headers: { authorization: 'Bearer nope' } })
     expect(res.statusCode).toBe(401)
   })
+  it('401 on a blank bearer token', async () => {
+    const res = await appWith().inject({ method: 'GET', url: '/x', headers: { authorization: 'Bearer ' } })
+    expect(res.statusCode).toBe(401)
+  })
   it('resolves the tenant on a valid key', async () => {
     const res = await appWith().inject({ method: 'GET', url: '/x', headers: { authorization: 'Bearer secret-key' } })
     expect(res.statusCode).toBe(200)
