@@ -26,7 +26,7 @@ v1.1 introduces **trust-on-first-use (TOFU)** provisioning across two privilege 
 
 2. **`TenantRegistry` is the shared boundary.** One class owns the whole tenant-mutation family — boot load, `register`, `updateCredentials`, key-hash lookup — and every mutation performs the DB write **and** the in-memory `Map` update together, so no caller can update one and forget the other. The engine is built **before** the row commits, so the DB never persists unbuildable creds.
 
-3. **Engine lifecycle: eager build at boot; in-memory write-through swap on mutation.** push-hub runs a single process in a single container per environment (`docker-compose.yml`, no replicas; dev and prod are separate stacks with separate DBs). So "hot-reload" is literally mutating the closed-over `Map` — one `Map.set`, no invalidation protocol, no cross-instance sync. The engine exposes no `close()`/`shutdown()` (verified in `@tsteil/push-service`), so replacing a `Map` entry and letting GC collect the old engine is safe. Rejected alternatives: *reload-on-read* (per-request DB lookup + staleness machinery, re-deriving what the `Map` already holds, loses boot fail-loud); *restart-required* (agent registers, sends, gets 401 until a human restarts — a caller-must-remember footgun).
+3. **Engine lifecycle: eager build at boot; in-memory write-through swap on mutation.** push-hub runs a single process in a single container per environment (`docker-compose.yml`, no replicas; dev and prod are separate stacks with separate DBs). So "hot-reload" is literally mutating the closed-over `Map` — one `Map.set`, no invalidation protocol, no cross-instance sync. **A swapped-out engine must be closed, not left to GC:** `apns2`'s `ApnsClient` starts a 10-minute keep-alive `setInterval` in its constructor whose timer roots the client even after `.unref()`, so a replaced APNs engine would leak (client + timer + live HTTP/2 sessions) for the process lifetime. So `@tsteil/push-service` gains an optional `PushService.close()` (published as **v1.1.1** — `ApnsTransport` → `client.destroy()`; `FcmTransport` a no-op, since `GoogleAuth` holds no timers/sockets), and `TenantRegistry.updateCredentials` closes the replaced engine after the swap — which also gives push-hub graceful shutdown for free. Rejected alternatives: *reload-on-read* (per-request DB lookup + staleness machinery, re-deriving what the `Map` already holds, loses boot fail-loud); *restart-required* (agent registers, sends, gets 401 until a human restarts — a caller-must-remember footgun).
 
 4. **Fail-loud at boot, preserved.** The registry's boot load decrypts every tenant's creds and builds every engine, throwing on any failure — the same "fail the deploy, not the first send" property v1.0 had for malformed env config. A wrong `PUSH_HUB_CRED_KEY` therefore surfaces at deploy time (decryption fails) rather than at some tenant's first send.
 
@@ -63,13 +63,12 @@ tenants = pgTable('tenants', {
 ## Components
 
 ### `src/crypto.ts` — credential encryption (~20 lines)
-- `encrypt(plaintext: string): string` — AES-256-GCM with the key from `PUSH_HUB_CRED_KEY`, a fresh random 12-byte IV, returning base64 of `iv‖authTag‖ciphertext`.
-- `decrypt(blob: string): string` — the inverse; throws on a bad tag (tamper/wrong key).
-- The key is 32 bytes supplied as 64 hex chars in `PUSH_HUB_CRED_KEY`; its length is validated when read.
-- Only `TenantRegistry` imports this module.
+- `encrypt(key: Buffer, plaintext: string): string` — AES-256-GCM with a fresh random 12-byte IV, returning base64 of `iv‖authTag‖ciphertext`.
+- `decrypt(key: Buffer, blob: string): string` — the inverse; throws on a bad tag (tamper/wrong key).
+- **Pure functions — the key is passed in, never read from `process.env` here.** This keeps the registry and its tests env-free, matching the codebase's dependency-injection seam (only `index.ts` reads env; everything else takes injected deps, which is what keeps the whole suite env-free). `PUSH_HUB_CRED_KEY` (32 bytes as 64 hex chars) is read and length-validated in exactly one place: `src/env.ts`.
 
 ### `src/registry.ts` — `TenantRegistry` (the shared boundary)
-Holds `Map<apiKeyHash, Tenant>` where `Tenant = { slug, apiKeyHash, engine }` (unchanged from v1.0). Constructed with `{ db, buildEngine }` where `buildEngine = createPushService` by default (injected so tests can substitute it).
+Holds `Map<apiKeyHash, Tenant>` where `Tenant = { slug, apiKeyHash, engine }` (unchanged from v1.0). Constructed with `{ db, buildEngine, credKey }` — `buildEngine = createPushService` by default (injected so tests can substitute it), and `credKey` is the injected encryption key (validated in `env`, never read here).
 
 - `load(): Promise<void>` — read all `tenants` rows; for each: `decrypt` creds → parse → `buildEngine({apns,fcm})` → put `{slug, apiKeyHash, engine}` in the Map. **Throws on any decrypt/build failure** (boot fail-loud).
 - `byKeyHash(hash): Tenant | undefined` — the data-plane + management-plane auth lookup.
@@ -77,7 +76,7 @@ Holds `Map<apiKeyHash, Tenant>` where `Tenant = { slug, apiKeyHash, engine }` (u
   1. require at least one of `apns`/`fcm` (reuse the v1.0 loader invariant) → else `InvalidCreds`.
   2. `buildEngine({apns,fcm})` — throws on malformed provider block → `InvalidCreds` (→ 400).
   3. generate `apiKey = phk_<random>`; `apiKeyHash = sha256(apiKey)`; `credsEncrypted = encrypt(JSON.stringify({apns,fcm}))`.
-  4. `INSERT` the row; a unique-slug violation → `SlugTaken` (→ 409).
+  4. `INSERT` the row; a unique violation (Postgres `23505`) → `SlugTaken` (→ 409). Any `23505` on insert is treated as a taken slug — an `api_key_hash` collision on 24 random bytes isn't a real event.
   5. on success, `Map.set(apiKeyHash, {slug, apiKeyHash, engine})`.
   6. return `{ slug, apiKey }` (the plaintext key, once).
   Ordering: engine built (step 2) before the row commits (step 4); Map updated (step 5) only after the commit succeeds.
@@ -94,11 +93,11 @@ Typed errors (`InvalidCreds`, `SlugTaken`) let the routes map to 400/409 without
 
 ### `src/routes/tenants.ts` — the provisioning routes
 - **`POST /v1/tenants`** — preHandler `requireEnrollKey`. Body (zod): `{ slug: string≥1, apns?: object, fcm?: object }`. → `registry.register(...)`. `201 { slug, apiKey }`. `InvalidCreds` → 400; `SlugTaken` → 409; bad body → 400.
-- **`PUT /v1/tenant/credentials`** — preHandler `requireTenant`. Body (zod): `{ apns?: object, fcm?: object }` (≥1 present). → `registry.updateCredentials(req.tenant, ...)`. `200 { ok: true }`. `InvalidCreds` → 400. A client can only ever update the tenant its key resolves to.
+- **`PUT /v1/tenant/credentials`** — preHandler `requireTenant`. Body (zod): `{ apns?: object, fcm?: object }` (≥1 present). → `registry.updateCredentials(req.tenant, ...)`. `200 { ok: true }`. `InvalidCreds` → 400. A client can only ever update the tenant its key resolves to. This is a **full replacement** of the tenant's provider set, not a merge — sending only `{ apns }` on a dual-provider tenant drops FCM (replacement avoids a "how do I remove a provider?" hole; agents send the complete provider set).
 
 ### Wiring changes (`src/config.ts`, `src/env.ts`, `src/app.ts`, `src/index.ts`)
 - **`src/env.ts`**: remove `PUSH_HUB_TENANTS`; add `PUSH_HUB_ENROLL_KEY` (required, non-empty) and `PUSH_HUB_CRED_KEY` (required, 64 hex chars).
-- **`src/config.ts`**: the `loadTenants(json)` env parser is removed; its `TenantInput`/provider-shape validation moves into `registry.register`. (`config.ts` may be deleted or reduced to the shared `Tenant`/`TenantInput` types.)
+- **`src/config.ts`** is **deleted**: `loadTenants` and its `TenantInput`/provider-shape validation move into `registry.register`, and the `Tenant` type moves to `src/registry.ts` (imported by `auth.ts`'s `declare module 'fastify'` and the route files). `test/config.test.ts` is removed with `loadTenants`; the four existing suites that hand-build a `Map` into `buildApp({ db, tenants })` (`app`, `auth`, `send.route`, `tokens.route`) migrate to the registry-shaped deps.
 - **`src/app.ts` / `src/index.ts`**: build one `TenantRegistry({ db })`, `await registry.load()` at boot (replaces `loadTenants(env.PUSH_HUB_TENANTS)`), pass it to `buildApp`; register the new routes. Boot log reports tenant count from the registry.
 
 ---
@@ -131,6 +130,7 @@ PUSH_HUB_CRED_KEY=<64 hex chars = 32 bytes>                      # openssl rand 
 
 - `PUSH_HUB_CRED_KEY` must be **stable per environment** — if it changes, existing encrypted creds can't be decrypted (boot fails loud, by design). dev and prod get their **own** cred keys (separate DBs).
 - `PUSH_HUB_ENROLL_KEY` is generated per environment and distributed only to the deploy/agent plane.
+- The engine dependency bumps to **`github:tayl0r/push-service#v1.1.1`** (adds `PushService.close()`, §Design decision 3), published first (like the v1.1.0 bump), then push-hub's `package.json` + lockfile update.
 - Deploy runs the new migration (adds `tenants`), then boots; **dev first**, so a mis-set `PUSH_HUB_CRED_KEY` bricks dev's boot, not prod's.
 - `.env.example` documents the two new vars and drops `PUSH_HUB_TENANTS`; the VPS `/opt/apps/push-hub{,-dev}/.env` files are updated over SSH (server-side only).
 
@@ -140,23 +140,25 @@ PUSH_HUB_CRED_KEY=<64 hex chars = 32 bytes>                      # openssl rand 
 
 - **crypto**: encrypt→decrypt round-trips; `decrypt` throws on a tampered blob and on a wrong key; a non-32-byte `PUSH_HUB_CRED_KEY` is rejected.
 - **registry** (DB + injected `buildEngine` mock): `load` builds an engine per row and throws if `buildEngine` throws; `register` returns a key, inserts an encrypted row, and hot-adds to the Map (a subsequent `byKeyHash` resolves it); `register` on a taken slug → `SlugTaken`; `register` with a provider block that makes `buildEngine` throw → `InvalidCreds` and **no row written**; `updateCredentials` re-encrypts the row and swaps the Map engine; the stored `credsEncrypted` is not plaintext.
-- **routes**: `POST /v1/tenants` with the enroll key registers (assert the tenant then authenticates on `/v1/send`); missing/wrong enroll key → 401; taken slug → 409; bad body / zero providers → 400. `PUT /v1/tenant/credentials` with a tenant key updates its own creds; **cross-tenant isolation** — tenant A's key cannot update tenant B (A only ever reaches its own row via `req.tenant`); wrong/no key → 401.
+- **routes**: `POST /v1/tenants` with the enroll key registers (assert the tenant then authenticates on `/v1/send`); missing/wrong enroll key → 401; **a valid *tenant* key on `POST /v1/tenants` → 401** (a data-plane key can never enroll — pins plane separation); taken slug → 409; bad body / zero providers → 400. `PUT /v1/tenant/credentials` with a tenant key updates its own creds; a **full-replacement** check — updating an `apns`+`fcm` tenant with `{ fcm }` only drops `apns`; **cross-tenant isolation** — tenant A's key cannot update tenant B (A only ever reaches its own row via `req.tenant`); wrong/no key → 401.
 - **boot fail-loud**: `load` against a row whose creds don't decrypt (wrong key) throws.
 
 ---
 
 ## Out of scope (deferred, with the fallback that covers each)
 
-- **Self-serve key rotation** — real lockout footgun (agent rotates, fails to persist the once-returned key, locked out); keys don't expire; leak recovery is the operator updating `api_key_hash` (and `scripts/new-tenant-key.sh` already emits the key+hash pair).
-- **Deregister** — destructive and rare; operator `DELETE` is fine.
+- **Self-serve key rotation** — real lockout footgun (agent rotates, fails to persist the once-returned key, locked out); keys don't expire; leak recovery is the operator updating `api_key_hash` **then restarting the container** (see the restart rule) and re-running the recovery helper.
+- **Deregister** — destructive and rare; operator `DELETE` **+ container restart** is fine.
 - **`GET /v1/tenant` introspection** — add in a few lines if agents actually fumble.
 - **Provider dry-run validation** at registration — couples to provider error taxonomies; the credentials-update route is the pragmatic recovery instead.
 - **KMS / per-tenant DEKs / cred-key rotation** — one env-held symmetric key matches the threat model (owner's own agents on a private host; defense-in-depth against a confused agent, not a hostile adversary).
 - **FK `push_tokens.app_slug → tenants.slug`** — composite-key isolation already does the structural work; coupling is unneeded.
 - **Multi-instance engine-cache invalidation** — single container per environment; no protocol needed until there are replicas.
 
+**Restart rule (applies to every operator fallback above):** the running process serves tenants from its in-memory `Map`, so any out-of-band DB mutation (a `DELETE`, an `api_key_hash` `UPDATE`) takes effect only at the next boot, when `load()` rebuilds the `Map`. Until then the old state keeps serving — operator recovery therefore always ends with a container restart.
+
 ---
 
 ## Discovery (self-service's other half — lands with this work)
 
-So an agent working on another app can *find* push-hub without a human: add a one-line pointer to each consuming app's `CLAUDE.md` (or the shared `vps/CLAUDE.md`) — "push notifications: register at `http://push-hub:3000` via `POST /v1/tenants` with the enroll key; see `github.com/tayl0r/push-hub`." The public README already documents the full flow; this just makes it reachable from where an agent starts.
+So an agent working on another app can *find* push-hub without a human: add a one-line pointer to each consuming app's `CLAUDE.md` (or the shared `vps/CLAUDE.md`) — "push notifications: register at `http://push-hub:3000` via `POST /v1/tenants` with the enroll key; see `github.com/tayl0r/push-hub`." **This work also rewrites the README and the helper script**, which today document the *removed* v1.0 flow (the `PUSH_HUB_TENANTS` block, the `new-tenant-key.sh` skeleton): the README Configuration + "Adopting push-hub" sections are rebuilt around `POST /v1/tenants` / `PUT /v1/tenant/credentials`, and `scripts/new-tenant-key.sh` is reworked for the DB world — emitting the operator's `UPDATE tenants SET api_key_hash = …` leak-recovery statement instead of a `PUSH_HUB_TENANTS` block. The discovery pointer then sends agents to an accurate README.
