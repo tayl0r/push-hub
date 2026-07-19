@@ -99,18 +99,25 @@ send. See `.env.example` for the full set of env vars the service reads.
 Each tenant's API key is an opaque random string the app sends as a bearer token; only
 its SHA-256 hash is stored in `PUSH_HUB_TENANTS`.
 
+The `scripts/new-tenant-key.sh <slug>` helper generates the key, hashes it correctly
+(over the exact key bytes — no trailing newline), and prints a ready-to-fill
+`PUSH_HUB_TENANTS` entry. Or do it by hand:
+
 ```bash
 # 1. generate the key — give this raw value to the app, once
 openssl rand -hex 24
 
 # 2. hash it — this is what goes in apiKeyHash
-echo -n "<the key from step 1>" | shasum -a 256 | awk '{ print $1 }'
+printf '%s' "<the key from step 1>" | shasum -a 256 | awk '{ print $1 }'
 ```
 
 ## Adopting push-hub in an app
 
 Give the app its `slug` + generated key and add its APNs/FCM credentials to
-`PUSH_HUB_TENANTS`. On the client, register each native device token (via
+`PUSH_HUB_TENANTS`. Apps on the same internal Docker network reach push-hub by DNS at
+`http://push-hub:3000` (or `http://push-hub-dev:3000` for the dev deployment) — it's not
+exposed publicly by default, and no separate service registry is needed. On the client,
+register each native device token (via
 `POST /v1/tokens`) once it's available and again whenever it's refreshed; on
 sign-out, call `DELETE /v1/tokens`. On the server, call `POST /v1/send` with the
 target `userId`(s) whenever a notification should go out — push-hub handles fan-out
