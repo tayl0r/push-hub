@@ -13,7 +13,7 @@ WORKDIR /app
 # pnpm silently skips both and the engine's dist/ never gets built.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-RUN corepack enable && corepack prepare pnpm@11 --activate
+RUN corepack enable && corepack prepare pnpm@11.5.0 --activate
 RUN pnpm install --frozen-lockfile
 
 COPY . .
