@@ -40,11 +40,12 @@ export function sendRoutes(app: FastifyInstance, deps: { db: any; tenants: Map<s
       return reply.code(500).send({ error: 'send failed' })
     }
 
-    const rowById = new Map(rows.map(r => [r.id, r]))
-    await deleteByIds(deps.db, results.filter(r => r.status === 'invalid' && r.ref).map(r => r.ref!))
+    const rowById = new Map<string | undefined, (typeof rows)[number]>(rows.map(r => [r.id, r]))
+    // only delete rows this request actually fetched — deleteByIds is keyed by global PK, so never trust a ref the engine didn't get from us
+    await deleteByIds(deps.db, results.filter(r => r.status === 'invalid' && r.ref && rowById.has(r.ref)).map(r => r.ref!))
 
     const tickets = results.map(r => ({
-      userId: r.ref ? rowById.get(r.ref)?.userId : undefined,
+      userId: rowById.get(r.ref)?.userId,
       status: r.status === 'delivered' ? 'ok' : 'error',
       ...(r.status === 'delivered' ? {} : { error: r.error ?? r.status }),
     }))
