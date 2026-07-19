@@ -1,0 +1,74 @@
+name: Deploy
+
+# Build the image, push it to GHCR, then deploy over SSH.
+#   main -> ghcr.io/tayl0r/push-hub:dev
+#   prod -> ghcr.io/tayl0r/push-hub:prod
+# Host, SSH credentials, the deploy directory, and the internal Docker network
+# are all host-side config, supplied here only as GitHub Environment secrets
+# (see the "dev" / "prod" environments in repo settings) — none of it is
+# hardcoded in this file.
+on:
+  push:
+    branches: [main, prod]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
+    env:
+      IMAGE_TAG: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          provenance: false
+          tags: ghcr.io/tayl0r/push-hub:${{ env.IMAGE_TAG }}
+
+      - name: Migrate and deploy
+        uses: appleboy/ssh-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ghcr.io/tayl0r/push-hub:${{ env.IMAGE_TAG }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          DEPLOY_NETWORK: ${{ secrets.DEPLOY_NETWORK }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GITHUB_TOKEN,GITHUB_ACTOR,IMAGE,DEPLOY_DIR,DEPLOY_NETWORK
+          script: |
+            set -e
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            docker pull "$IMAGE"
+            # Run migrations from the freshly pulled image before the new
+            # container starts — the image carries devDeps + src/ for this
+            # (see Dockerfile). DEPLOY_DIR/.env holds this environment's
+            # DATABASE_URL and the rest of the service config.
+            docker run --rm \
+              --network "$DEPLOY_NETWORK" \
+              --env-file "$DEPLOY_DIR/.env" \
+              "$IMAGE" pnpm db:migrate
+            cd "$DEPLOY_DIR"
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
