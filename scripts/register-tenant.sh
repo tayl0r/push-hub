@@ -23,27 +23,31 @@
 #   --dry-run           print the request (enroll key redacted) instead of sending it
 #
 # Requires: jq, curl (and docker if --network is used). The enroll key comes from
-# $PUSH_HUB_ENROLL_KEY (never a flag), matching the dev/prod key in DEPLOY.md.
+# $PUSH_HUB_ENROLL_KEY (never a flag), and is passed to curl via a mode-600 config
+# file (never argv) so it doesn't show in `ps` / `docker inspect`.
 set -euo pipefail
 
 die() { echo "error: $*" >&2; exit 1; }
 
-slug=""; env=""; url=""; network=""; production=""
+slug=""; env=""; url=""; network=""; production=""; production_set=""
 p8=""; key_id=""; team_id=""; bundle=""; firebase=""; dry_run=""
+
+# each value flag requires a following argument — fail loudly if it's missing
+need_val() { [ "$2" -ge 2 ] || die "missing value for $1"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --env)        env="${2:-}"; shift 2 ;;
-    --url)        url="${2:-}"; shift 2 ;;
-    --network)    network="${2:-}"; shift 2 ;;
-    --production) production="${2:-}"; shift 2 ;;
-    --p8)         p8="${2:-}"; shift 2 ;;
-    --key-id)     key_id="${2:-}"; shift 2 ;;
-    --team-id)    team_id="${2:-}"; shift 2 ;;
-    --bundle)     bundle="${2:-}"; shift 2 ;;
-    --firebase)   firebase="${2:-}"; shift 2 ;;
+    --env)        need_val "$1" $#; env="$2";        shift 2 ;;
+    --url)        need_val "$1" $#; url="$2";        shift 2 ;;
+    --network)    need_val "$1" $#; network="$2";    shift 2 ;;
+    --production) need_val "$1" $#; production="$2"; production_set=1; shift 2 ;;
+    --p8)         need_val "$1" $#; p8="$2";         shift 2 ;;
+    --key-id)     need_val "$1" $#; key_id="$2";     shift 2 ;;
+    --team-id)    need_val "$1" $#; team_id="$2";    shift 2 ;;
+    --bundle)     need_val "$1" $#; bundle="$2";     shift 2 ;;
+    --firebase)   need_val "$1" $#; firebase="$2";   shift 2 ;;
     --dry-run)    dry_run=1; shift ;;
-    -h|--help)    sed -n '2,30p' "$0"; exit 0 ;;
+    -h|--help)    awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
     -*)           die "unknown option: $1" ;;
     *)            if [ -z "$slug" ]; then slug="$1"; shift; else die "unexpected arg: $1"; fi ;;
   esac
@@ -68,21 +72,23 @@ if [ -n "$p8$key_id$team_id$bundle" ]; then
   [ -n "$p8" ] && [ -n "$key_id" ] && [ -n "$team_id" ] && [ -n "$bundle" ] \
     || die "APNs needs all of --p8 --key-id --team-id --bundle"
   [ -f "$p8" ] || die "no such .p8 file: $p8"
-  grep -q 'BEGIN PRIVATE KEY' "$p8" || die "$p8 doesn't look like a .p8 (no 'BEGIN PRIVATE KEY')"
+  grep -q -- 'BEGIN PRIVATE KEY' "$p8" || die "$p8 doesn't look like a .p8 (no 'BEGIN PRIVATE KEY')"
   signing_key=$(base64 < "$p8" | tr -d '\n')   # signingKey = base64 of the .p8 (newlines stripped)
 fi
 
-# FCM block from the service-account JSON (jq extracts + the body-builder re-escapes the key)
+# FCM block from the service-account JSON (read via stdin so dash-prefixed paths are safe)
 f_project=""; f_email=""; f_key=""
 if [ -n "$firebase" ]; then
   [ -f "$firebase" ] || die "no such firebase json: $firebase"
-  f_project=$(jq -re '.project_id'   "$firebase") || die "firebase json: missing project_id"
-  f_email=$(jq -re   '.client_email' "$firebase") || die "firebase json: missing client_email"
-  f_key=$(jq -re     '.private_key'  "$firebase") || die "firebase json: missing private_key"
+  f_project=$(jq -re '.project_id'   < "$firebase") || die "firebase json: not JSON, or missing project_id"
+  f_email=$(jq -re   '.client_email' < "$firebase") || die "firebase json: missing client_email"
+  f_key=$(jq -re     '.private_key'  < "$firebase") || die "firebase json: missing private_key"
 fi
 
 [ -n "$signing_key" ] || [ -n "$f_project" ] \
   || die "at least one provider required: --p8 group and/or --firebase"
+[ -n "$signing_key" ] || [ -z "$production_set" ] \
+  || echo "note: --production is ignored with no APNs block (FCM-only registration)" >&2
 
 # jq builds the body so all escaping (esp. the FCM private_key newlines) is correct
 body=$(jq -nc \
@@ -104,17 +110,24 @@ fi
 
 [ -n "${PUSH_HUB_ENROLL_KEY:-}" ] || die "set PUSH_HUB_ENROLL_KEY to the $env enroll key (see DEPLOY.md)"
 
+# Pass the enroll key to curl via a mode-600 config file, not argv, so it never
+# appears in `ps` / `docker inspect`. The request body travels over stdin.
+hdr_file=$(mktemp); chmod 600 "$hdr_file"
+trap 'rm -f "$hdr_file"' EXIT
+printf 'header = "Authorization: Bearer %s"\n' "$PUSH_HUB_ENROLL_KEY" > "$hdr_file"
+
 run_curl() {
   if [ -n "$network" ]; then
-    docker run --rm -i --network "$network" curlimages/curl:latest "$@"
+    # --user 0 so the container can read the root-owned mode-600 config
+    docker run --rm -i --user 0 -v "$hdr_file":/tmp/curlrc:ro --network "$network" \
+      curlimages/curl:latest -K /tmp/curlrc "$@"
   else
-    curl "$@"
+    curl -K "$hdr_file" "$@"
   fi
 }
 
-resp=$(printf '%s' "$body" | run_curl -sS -w $'\n%{http_code}' \
+resp=$(printf '%s' "$body" | run_curl -sS --connect-timeout 5 --max-time 60 -w $'\n%{http_code}' \
   -X POST "$url/v1/tenants" \
-  -H "Authorization: Bearer $PUSH_HUB_ENROLL_KEY" \
   -H 'Content-Type: application/json' \
   --data-binary @-) \
   || die "request failed — is push-hub reachable at $url? On the VPS use --network <docker-net>."
@@ -123,7 +136,7 @@ code=$(printf '%s' "$resp" | tail -n1)
 out=$(printf '%s' "$resp" | sed '$d')
 
 if [ "$code" = "201" ]; then
-  api_key=$(printf '%s' "$out" | jq -re '.apiKey')
+  api_key=$(printf '%s' "$out" | jq -re '.apiKey') || die "HTTP 201 but no apiKey in response: $out"
   echo
   echo "✓ registered '$slug' on $env — API key (shown ONCE; put in the app's .env, never commit):"
   echo
@@ -131,6 +144,6 @@ if [ "$code" = "201" ]; then
   echo
 else
   echo "✗ registration failed (HTTP $code):" >&2
-  printf '%s\n' "$out" | jq . 2>/dev/null >&2 || printf '%s\n' "$out" >&2
+  printf '%s\n' "$out" | jq . >&2 2>/dev/null || printf '%s\n' "$out" >&2
   exit 1
 fi
