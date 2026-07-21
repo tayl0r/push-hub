@@ -1,10 +1,7 @@
-import { createPushService, type ApnsConfig, type FcmConfig, type PushService } from '@tsteil/push-service'
+import { createPushService, type ApnsConfig, type FcmConfig } from '@tsteil/push-service'
+import type { Tenant } from './registry.js'
 
-export interface Tenant {
-  slug: string
-  apiKeyHash: string
-  engine: PushService
-}
+export type { Tenant } // re-export so ./config.js importers keep resolving until Task 9 deletes this file
 
 interface TenantInput {
   slug: string
