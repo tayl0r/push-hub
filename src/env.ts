@@ -3,7 +3,6 @@ import { z } from 'zod'
 export const schema = z.object({
   DATABASE_URL: z.string().url(),
   PORT: z.coerce.number().default(3000),
-  PUSH_HUB_TENANTS: z.string().default('[]'), // legacy env source; removed in the Task 9 cutover
   PUSH_HUB_ENROLL_KEY: z.string().min(1),
   PUSH_HUB_CRED_KEY: z
     .string()
