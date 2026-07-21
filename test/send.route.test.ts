@@ -7,16 +7,17 @@ import * as schema from '../src/db/schema.js'
 import { hashKey } from '../src/auth.js'
 import { sendRoutes } from '../src/routes/send.js'
 import { registerToken, tokensForUsers } from '../src/store.js'
+import type { TenantLookup } from '../src/registry.js'
 
 const client = postgres(process.env.TEST_DATABASE_URL!)
 const db = drizzle(client, { schema })
-const engine = { send: vi.fn() }
+const engine = { send: vi.fn(), close: vi.fn() }
 const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
-const tenants = new Map([[tenant.apiKeyHash, tenant]])
+const registry: TenantLookup = { byKeyHash: (h) => (h === tenant.apiKeyHash ? tenant : undefined) }
 
 function app() {
   const a = Fastify()
-  sendRoutes(a, { db, tenants })
+  sendRoutes(a, { db, registry })
   return a
 }
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })

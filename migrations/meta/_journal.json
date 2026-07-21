@@ -8,6 +8,13 @@
       "when": 1784448136841,
       "tag": "0000_dry_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784605780299,
+      "tag": "0001_slim_black_tom",
+      "breakpoints": true
     }
   ]
 }

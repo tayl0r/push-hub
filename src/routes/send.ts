@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import * as Sentry from '@sentry/node'
 import { requireTenant } from '../auth.js'
-import type { Tenant } from '../config.js'
+import type { TenantLookup } from '../registry.js'
 import { tokensForUsers, deleteByIds } from '../store.js'
 
 const sendBody = z.object({
@@ -15,8 +15,8 @@ const sendBody = z.object({
   priority: z.enum(['high', 'normal']).optional(),
 })
 
-export function sendRoutes(app: FastifyInstance, deps: { db: any; tenants: Map<string, Tenant> }) {
-  app.post('/v1/send', { preHandler: requireTenant(deps.tenants) }, async (req, reply) => {
+export function sendRoutes(app: FastifyInstance, deps: { db: any; registry: TenantLookup }) {
+  app.post('/v1/send', { preHandler: requireTenant(deps.registry) }, async (req, reply) => {
     const parsed = sendBody.safeParse(req.body)
     if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: parsed.error.flatten() })
     const { to, title, body, data, badge, sound, priority } = parsed.data

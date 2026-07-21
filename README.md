@@ -72,61 +72,73 @@ token lifecycle themselves.
 
 ## Configuration
 
-push-hub loads its tenants from a single JSON env var, `PUSH_HUB_TENANTS`, so
-credentials stay in the deploy environment and never touch the database:
+push-hub stores tenants in Postgres (provider credentials encrypted at rest), not in
+env config. A running deployment needs two secrets beyond its database URL:
 
-```jsonc
-[
-  {
-    "slug": "my-app",
-    "apiKeyHash": "<sha256 hex digest of the app's key>",
-    "apns": {
-      "keyId": "...", "teamId": "...", "bundleId": "com.example.myapp",
-      "signingKey": "<base64-encoded .p8 contents>", "production": true
-    },
-    "fcm": { "projectId": "...", "clientEmail": "...", "privateKey": "..." }
-  }
-]
-```
+| Env var | Plane | Purpose |
+|---|---|---|
+| `PUSH_HUB_ENROLL_KEY` | deploy/agent | Registration-only. Authorizes `POST /v1/tenants` to claim a **new, unclaimed** slug — nothing else. Generate with `openssl rand -hex 24`. Keep it in the deploy/agent plane, not in each app's runtime env. |
+| `PUSH_HUB_CRED_KEY` | server | 32-byte (64 hex char) AES-256-GCM key encrypting tenant creds at rest. Generate with `openssl rand -hex 32`. **Must be stable per environment forever** — changing it makes existing encrypted creds unrecoverable (the service fails to boot, by design). dev and prod get their own keys. |
 
-`apns` and `fcm` are each optional per tenant (an iOS-only or Android-only app doesn't
-need both), but **at least one is required** — a tenant with neither is rejected at
-startup. A structurally malformed provider block also fails startup, not the first
-send. See `.env.example` for the full set of env vars the service reads.
+See `.env.example` for the full set. There is no `PUSH_HUB_TENANTS` — tenants self-register.
 
-### Generating an app key
+### Registering a tenant (self-service)
 
-Each tenant's API key is an opaque random string the app sends as a bearer token; only
-its SHA-256 hash is stored in `PUSH_HUB_TENANTS`.
-
-The `scripts/new-tenant-key.sh <slug>` helper generates the key, hashes it correctly
-(over the exact key bytes — no trailing newline), and prints a ready-to-fill
-`PUSH_HUB_TENANTS` entry. Or do it by hand:
+An agent provisioning an app registers it once with the enroll key:
 
 ```bash
-# 1. generate the key — give this raw value to the app, once
-openssl rand -hex 24
-
-# 2. hash it — this is what goes in apiKeyHash
-printf '%s' "<the key from step 1>" | shasum -a 256 | awk '{ print $1 }'
+curl -sX POST http://push-hub:3000/v1/tenants \
+  -H "Authorization: Bearer $PUSH_HUB_ENROLL_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "slug": "my-app",
+    "apns": { "keyId": "...", "teamId": "...", "bundleId": "com.example.myapp",
+              "signingKey": "<base64 of the .p8>", "production": true },
+    "fcm":  { "projectId": "...", "clientEmail": "...", "privateKey": "..." }
+  }'
+# → 201 { "slug": "my-app", "apiKey": "phk_…" }   ← shown ONCE; give it to the app's .env
 ```
+
+`apns` and `fcm` are each optional (an iOS-only or Android-only app needs just one), but
+**at least one is required**. The first registrant of a slug owns it; a second
+registration of the same slug returns `409`. Registration validates credential *shape*,
+not correctness — a well-formed-but-wrong `.p8`/Firebase key registers successfully and
+only fails at first send.
+
+### Fixing bad credentials
+
+Because registration only checks shape, the recovery path for wrong creds is a
+tenant-key-authed full replacement (send the complete provider set you want; omitted
+providers are dropped):
+
+```bash
+curl -sX PUT http://push-hub:3000/v1/tenant/credentials \
+  -H "Authorization: Bearer $APP_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{ "apns": { … }, "fcm": { … } }'
+# → 200 { "ok": true }
+```
+
+A tenant's API key manages **only its own** tenant. Key rotation / deregistration are
+operator actions (`scripts/new-tenant-key.sh` + a container restart).
 
 ## Adopting push-hub in an app
 
-Give the app its `slug` + generated key and add its APNs/FCM credentials to
-`PUSH_HUB_TENANTS`. Apps on the same internal Docker network reach push-hub by DNS at
-`http://push-hub:3000` (or `http://push-hub-dev:3000` for the dev deployment) — it's not
-exposed publicly by default, and no separate service registry is needed. On the client,
-register each native device token (via
-`POST /v1/tokens`) once it's available and again whenever it's refreshed; on
-sign-out, call `DELETE /v1/tokens`. On the server, call `POST /v1/send` with the
-target `userId`(s) whenever a notification should go out — push-hub handles fan-out
-across that user's devices and dead-token cleanup for you. See
-[`@tsteil/push-service`](https://github.com/tayl0r/push-service)'s
+Apps on the same internal Docker network reach push-hub by DNS at `http://push-hub:3000`
+(or `http://push-hub-dev:3000` for dev) — it is not exposed publicly, and no separate
+service registry is needed.
+
+1. **Register the tenant** with the enroll key (see Configuration above) and put the
+   returned `phk_…` key in the app's own `.env` / secret store.
+2. On the client, register each native device token via `POST /v1/tokens` once it is
+   available and again whenever it refreshes; on sign-out call `DELETE /v1/tokens`.
+3. On the server, call `POST /v1/send` with the target `userId`(s) — push-hub fans out
+   across that user's devices and cleans up dead tokens.
+
+See [`@tsteil/push-service`](https://github.com/tayl0r/push-service)'s
 [integration guide](https://github.com/tayl0r/push-service/blob/main/docs/INTEGRATION.md)
-for background on how native tokens and provider credentials work; push-hub just
-moves the storage, fan-out, and cleanup steps it describes server-side, shared
-across apps.
+for how native tokens and provider credentials work; push-hub moves the storage, fan-out,
+and cleanup server-side, shared across apps.
 
 ## License
 
