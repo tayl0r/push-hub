@@ -7,7 +7,15 @@ import { TenantRegistry, InvalidCreds, SlugTaken } from '../registry.js'
 const provider = z.object({}).passthrough() // provider shape is validated by the engine at build time, not here
 const providerFields = { apns: provider.optional(), fcm: provider.optional() }
 
-const registerBody = z.object({ slug: z.string().min(1), ...providerFields })
+// RFC 1123 / DNS-1123 label (as Kubernetes enforces): lowercase alphanumeric + internal
+// hyphens, must start and end alphanumeric, 1–63 chars. Slugs are permanent tenant identities,
+// so reject non-conforming input rather than normalizing it.
+const SLUG_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
+
+const registerBody = z.object({
+  slug: z.string().regex(SLUG_RE, 'slug must be a lowercase DNS-1123 label (a-z, 0-9, hyphens; start/end alphanumeric; ≤63 chars)'),
+  ...providerFields,
+})
 // No ≥1-provider refine: the registry's buildOrThrow is the single owner of that rule and runs on
 // both register + updateCredentials, so both routes reject zero providers identically — via
 // InvalidCreds → 400 (same status AND same error body) — and stay symmetric.

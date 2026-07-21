@@ -75,6 +75,31 @@ describe('POST /v1/tenants', () => {
   })
 })
 
+describe('POST /v1/tenants — slug validation (RFC 1123 / DNS-1123 label)', () => {
+  it.each(['team-comm', 'a', 'app-123'])('accepts a valid DNS-1123 label slug: %j', async (slug) => {
+    const app = await appWith()
+    const res = await app.inject({ method: 'POST', url: '/v1/tenants', headers: enroll, payload: { slug, apns } })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().slug).toBe(slug)
+  })
+
+  it.each([
+    ['Team-Comm', 'uppercase'],
+    ['a b', 'space'],
+    ['a/../b', 'slash/traversal'],
+    ['-lead', 'leading hyphen'],
+    ['trail-', 'trailing hyphen'],
+    ['a'.repeat(64), 'too long (64 chars)'],
+    ['', 'empty'],
+  ])('rejects %j (%s) with 400 and writes no tenant row', async (slug) => {
+    const app = await appWith()
+    const res = await app.inject({ method: 'POST', url: '/v1/tenants', headers: enroll, payload: { slug, apns } })
+    expect(res.statusCode).toBe(400)
+    const rows = await db.select().from(tenants)
+    expect(rows.length).toBe(0) // the registry was never called — rejected by zod before it could write
+  })
+})
+
 describe('PUT /v1/tenant/credentials', () => {
   async function register(app: any, slug: string, payload: any) {
     const res = await app.inject({ method: 'POST', url: '/v1/tenants', headers: enroll, payload: { slug, ...payload } })
