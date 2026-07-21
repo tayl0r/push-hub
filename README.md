@@ -100,8 +100,10 @@ curl -sX POST http://push-hub:3000/v1/tenants \
 ```
 
 `apns` and `fcm` are each optional (an iOS-only or Android-only app needs just one), but
-**at least one is required**. The first registrant of a slug owns it; a second
-registration of the same slug returns `409`. Registration validates credential *shape*,
+**at least one is required**. The `slug` is the app's **permanent** identifier — a
+lowercase DNS-1123 label (`a-z`, `0-9`, and hyphens; must start and end alphanumeric;
+≤63 chars) that can't be changed later, so choose it deliberately. The first registrant
+of a slug owns it; a second registration of the same slug returns `409`. Registration validates credential *shape*,
 not correctness — a well-formed-but-wrong `.p8`/Firebase key registers successfully and
 only fails at first send.
 
