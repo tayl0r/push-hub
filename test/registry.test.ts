@@ -100,4 +100,19 @@ describe('TenantRegistry', () => {
     const [rowAfter] = await db.select().from(tenants)
     expect(rowAfter.credsEncrypted).not.toBe(rowBefore.credsEncrypted) // re-encrypted
   })
+
+  it('closes the engine it built when the UPDATE fails, leaving the map entry unchanged (no leak on 500)', async () => {
+    const r = registry()
+    const { apiKey } = await r.register({ slug: 'team-comm', apns })   // engines[0] — the old engine, stays open
+    const before = r.byKeyHash(hashKey(apiKey))!
+    const spy = vi.spyOn(db, 'update').mockImplementationOnce(() => { throw new Error('db update boom') })
+
+    await expect(r.updateCredentials(before, { fcm: { projectId: 'p', clientEmail: 'e', privateKey: 'k' } })).rejects.toThrow()
+
+    expect(engines[1].close).toHaveBeenCalledTimes(1)                 // the newly built engine is torn down
+    expect(engines[0].close).not.toHaveBeenCalled()                   // the old engine keeps serving
+    expect(r.byKeyHash(hashKey(apiKey))!.engine).toBe(before.engine)  // map entry unchanged
+
+    spy.mockRestore()
+  })
 })
