@@ -5,26 +5,27 @@ import { sql } from 'drizzle-orm'
 import * as schema from '../src/db/schema.js'
 import { hashKey } from '../src/auth.js'
 import { buildApp } from '../src/app.js'
+import type { TenantLookup } from '../src/registry.js'
 
 const client = postgres(process.env.TEST_DATABASE_URL!)
 const db = drizzle(client, { schema })
-const engine = { send: vi.fn() }
+const engine = { send: vi.fn(), close: vi.fn() }
 const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
-const tenants = new Map([[tenant.apiKeyHash, tenant]])
+const registry: TenantLookup = { byKeyHash: (h) => (h === tenant.apiKeyHash ? tenant : undefined) }
 
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })
 afterAll(async () => { await client.end() })
 
 describe('buildApp', () => {
   it('GET /health returns 200 { ok: true }', async () => {
-    const app = buildApp({ db, tenants })
+    const app = buildApp({ db, registry })
     const res = await app.inject({ method: 'GET', url: '/health' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ ok: true })
   })
 
   it('registers a device then sends it a push end-to-end', async () => {
-    const app = buildApp({ db, tenants })
+    const app = buildApp({ db, registry })
 
     const register = await app.inject({
       method: 'POST',

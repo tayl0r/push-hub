@@ -7,19 +7,19 @@ import * as schema from '../src/db/schema.js'
 import { hashKey } from '../src/auth.js'
 import { tokensForUsers } from '../src/store.js'
 import { tokenRoutes } from '../src/routes/tokens.js'
-import type { Tenant } from '../src/config.js'
+import type { Tenant, TenantLookup } from '../src/registry.js'
 
 const client = postgres(process.env.TEST_DATABASE_URL!)
 const db = drizzle(client, { schema })
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`) })
 afterAll(async () => { await client.end() })
 
-const tenant: Tenant = { slug: 'team-comm', apiKeyHash: hashKey('secret-key'), engine: { send: vi.fn() } as any }
-const tenants = new Map([[tenant.apiKeyHash, tenant]])
+const tenant: Tenant = { slug: 'team-comm', apiKeyHash: hashKey('secret-key'), engine: { send: vi.fn(), close: vi.fn() } as any }
+const registry: TenantLookup = { byKeyHash: (h) => (h === tenant.apiKeyHash ? tenant : undefined) }
 
 function appWith() {
   const app = Fastify()
-  tokenRoutes(app, { db, tenants })
+  tokenRoutes(app, { db, registry })
   return app
 }
 
