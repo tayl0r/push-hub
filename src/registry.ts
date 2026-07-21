@@ -59,10 +59,10 @@ export class TenantRegistry implements TenantLookup {
 
   async register(input: { slug: string; apns?: ApnsConfig; fcm?: FcmConfig }): Promise<{ slug: string; apiKey: string }> {
     const creds: PushServiceConfig = { apns: input.apns, fcm: input.fcm } // the provider set minus slug — built + encrypted as one value
-    const engine = this.buildOrThrow(creds)                          // engine built before the row commits
     const apiKey = `phk_${randomBytes(24).toString('hex')}`
     const apiKeyHash = hashKey(apiKey)
     const credsEncrypted = encrypt(this.credKey, JSON.stringify(creds))
+    const engine = this.buildOrThrow(creds)                           // engine built last — nothing throwing sits between this and the teardown try
     try {
       await this.db.insert(tenants).values({ slug: input.slug, apiKeyHash, credsEncrypted })
     } catch (err) {
@@ -75,8 +75,8 @@ export class TenantRegistry implements TenantLookup {
   }
 
   async updateCredentials(tenant: Tenant, creds: PushServiceConfig): Promise<void> {
-    const engine = this.buildOrThrow(creds)
     const credsEncrypted = encrypt(this.credKey, JSON.stringify(creds))
+    const engine = this.buildOrThrow(creds)                           // engine built last — nothing throwing sits between this and the teardown try
     try {
       await this.db.update(tenants).set({ credsEncrypted, updatedAt: new Date() }).where(eq(tenants.apiKeyHash, tenant.apiKeyHash))
     } catch (err) {
