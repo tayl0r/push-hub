@@ -4,7 +4,7 @@ dev-flow:
   stops: [post-design, pre-merge]
 ---
 
-# push-hub — Deploy: adopt the shared `/opt/apps/deploy.sh` (kills the redundant pull)
+# push-hub — Deploy: single-pull fix (drop the redundant `docker compose pull`)
 
 **Date:** 2026-07-21
 **Issue:** tayl0r/push-hub#4
@@ -35,7 +35,7 @@ The image is **already local** from pull #1, so the `docker compose pull` is a p
 
 The 403 is **per request**, so pull #1 is exposed to the same flake too — with no retry, and using a login written into the shared `/root/.docker/config.json` (which can carry a stale token from a prior run or be clobbered by a concurrent deploy — a failure mode documented in the VPS deploy notes). Removing only pull #2 would halve the exposure while leaving pull #1's flake, its missing retry, and the shared-config login untouched. The fleet already has a single, correct home for all of this — so the right fix is not to patch push-hub's copy but to stop keeping a copy.
 
-**Goal:** push-hub's deploy makes exactly **one** GHCR round-trip, that round-trip is retried, its credential is isolated, and `up` reuses the already-local image — by delegating to the shared script rather than re-implementing it.
+**Goal (as adopted):** push-hub's deploy makes exactly **one** GHCR round-trip — `up` reuses the image already pulled by pull #1, instead of re-pulling it via `docker compose pull`. A retried pull and an isolated GHCR credential (available by delegating to the shared `/opt/apps/deploy.sh`) were Approach A's additional benefits on top of that; both are declined along with Approach A — see Decision.
 
 ---
 
@@ -61,7 +61,9 @@ The 403 is **per request**, so pull #1 is exposed to the same flake too — with
 
 Both remove the redundant second pull, so both fix the issue's literal symptom. They differ in whether push-hub keeps its own deploy logic or converges on the fleet's shared seam.
 
-### Approach A — Adopt the shared `/opt/apps/deploy.sh` (RECOMMENDED)
+### Approach A — Adopt the shared `/opt/apps/deploy.sh` (the review's recommendation — DECLINED, see Decision)
+
+*(Declined: the user chose Approach B instead, specifically to avoid a runtime dependency on the `tayl0r/vps`-owned script — see Decision. The analysis below is retained as the reasoned record of what was considered, not as the adopted plan.)*
 
 Replace the inline SSH `script:` with a call to the shared script, mirroring the reference adoption. push-hub's deploy dir is chosen per environment as plain workflow env (`push-hub` / `push-hub-dev`), and the two now-redundant secrets are dropped. See "The change" for the exact YAML.
 
@@ -80,7 +82,9 @@ Replace the inline SSH `script:` with a call to the shared script, mirroring the
 - **Blast radius, de-risked to fact:** the change touches one file; its failure modes are all loud aborts (missing compose file → `exit 1`; migrate can't reach DB → non-zero exit before `up`); it is rehearsable pre-merge (`workflow_dispatch` → dev environment, see Verification); the identical pattern is already green on this VPS via `#7`.
 - **Cost:** a runtime dependency on the on-VPS script — but push-hub already depends on VPS state (deploy dir, `.env`, live compose, the `apps_internal` network, `apps-postgres-1`); the script is doctrine-designated shared infrastructure like Postgres itself. This is convergence, not new coupling.
 
-### Approach B — Minimal inline patch (rejected alternative)
+### Approach B — Minimal inline patch (ADOPTED, see Decision)
+
+*(Adopted: despite the analysis below arguing Approach A is strictly stronger, the user chose this minimal, self-contained patch anyway — see Decision. The "rejected" reasoning that follows is the adversarial review's case against B; it is retained unchanged as the reasoned record, not a live objection.)*
 
 Delete the `docker compose pull` line and pin the `up` to the local image, leaving the rest of the inline script in place:
 
@@ -182,15 +186,11 @@ Deltas from today: the `DEPLOY_DIR` and `DEPLOY_NETWORK` secrets vanish from `en
 
 ## Verification & success criteria
 
-The goal ("exactly one GHCR round-trip") is checkable, and the change is rehearsable before it can touch prod.
+The goal ("exactly one GHCR round-trip") is checkable directly against the deploy-step log. There is no separate `deploy.sh`-mediated dry run under Approach B — validation is the deploy itself, dev first, since there is no unit test for a CI-workflow edit.
 
-**Pre-merge rehearsal (dev, zero prod risk):** from the feature branch, `workflow_dispatch` the workflow. `environment:` resolves to `dev` for any non-`prod` ref, so this runs the full new path against `push-hub-dev`. Expect: green run; the deploy step log shows `deploy.sh` performing a single `docker pull` (with its retry framing) and **no** `Pulling`/`docker compose pull` output between the migrate and container start; a migrate line indicating success; `up -d --pull never`. This is the same pattern `substitute-teacher-helper#7` already ran green on this VPS.
+**Deploy validation (dev then prod):** merging to `main` deploys **dev** only; **prod** deploys only on a push to the `prod` branch — so dev is always exercised first. After each, confirm the deploy-step log shows the explicit `docker pull "$IMAGE"`, then the migrate, then **no** `Pulling`/`docker compose pull` output before `up -d --pull never`; and confirm `docker ps` shows `push-hub-dev-push-hub-1` Up on the new image digest (and, after the prod push, `push-hub-push-hub-1` likewise).
 
-**Post-merge, dev then prod:** merging to `main` deploys **dev** only; **prod** deploys only on push to the `prod` branch — so dev is always exercised first. After each, confirm on the host: `docker ps` shows `push-hub{-,-dev}-push-hub-1` Up on the freshly pushed image digest, and the deploy-step log shows exactly one pull and no second round-trip.
-
-**Post-merge cleanup:** N/A under the adopted Approach B — the inline script still reads `DEPLOY_DIR`/`DEPLOY_NETWORK`, so they stay in use and are NOT deleted. (Issue **#5**, which proposed deleting them, was specific to Approach A and should be closed.)
-
-**Post-merge validation (the real test for this change):** there is no unit test for a CI-workflow edit; validation is the deploy itself. Merging to `main` deploys **dev**; confirm the deploy-step log shows the explicit `docker pull`, the migrate, then **no** `Pulling`/`docker compose pull` output before `up -d --pull never`, and `docker ps` shows `push-hub-dev-push-hub-1` Up on the new digest. Prod follows only on a push to the `prod` branch.
+**Post-merge cleanup:** N/A under the adopted Approach B — the inline script still reads `DEPLOY_DIR`/`DEPLOY_NETWORK`, so they stay in use and are NOT deleted. (Issue **#5**, which proposed deleting them, was specific to Approach A and is now closed — see "Out of scope / follow-ups".)
 
 ---
 
@@ -198,9 +198,9 @@ The goal ("exactly one GHCR round-trip") is checkable, and the change is rehears
 
 Most of what would have been assumed was instead **verified** against the live VPS (recorded under "Current state"): the deploy dirs (`/opt/apps/push-hub{,-dev}`), the migrate network (`apps_internal`, matching the script's hardcode), the single-service live compose files, and the image refs (`ghcr.io/tayl0r/push-hub:{prod,dev}` = `$IMAGE`). What remains genuinely unverifiable, stated honestly:
 
-- **A1 — SSH Environment secrets (`SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`) are valid.** Untouched by this change; today's green deploys are the standing evidence.
-- **A2 — `/opt/apps/deploy.sh` stays signature-stable.** It is owned by `tayl0r/vps` and doctrine-designated shared infrastructure; push-hub cannot pin its version, exactly as it cannot pin the shared Postgres. Accepted as the same class of dependency the whole fleet takes.
-- **A3 — `DEPLOY_DIR` / `DEPLOY_NETWORK` values were inferred, not read back.** Their ground truth (`/opt/apps/push-hub{,-dev}`, `apps_internal`) is established to practical certainty from live topology + working deploys, and Approach A makes the values irrelevant by dropping the secrets.
+- **A1 — SSH Environment secrets (`SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`) are valid.** Untouched by this change; today's green deploys are the standing evidence. Applies under the adopted Approach B.
+- **A2 — `/opt/apps/deploy.sh` stays signature-stable.** Approach-A-only: this would matter only if push-hub delegated to the shared script. Approach A was declined specifically to avoid that coupling (see Decision), so under the adopted Approach B push-hub takes no dependency on `deploy.sh`'s signature at all — this assumption does not apply to the live plan.
+- **A3 — `DEPLOY_DIR` / `DEPLOY_NETWORK` values were inferred, not read back.** Their ground truth (`/opt/apps/push-hub{,-dev}`, `apps_internal`) is established to practical certainty from live topology + working deploys. Under the adopted Approach B the secrets are kept, not dropped (see "Out of scope / follow-ups"), so this inferred-not-read-back status remains a live, accepted assumption rather than one Approach A would have mooted.
 
 No blocking ambiguity remains: every fork was resolved against verified fact or a doctrine-backed default.
 
@@ -208,16 +208,16 @@ No blocking ambiguity remains: every fork was resolved against verified fact or 
 
 ## Risks & mitigations
 
-- **Local image somehow absent at `up`.** `deploy.sh` uses `--pull never`, so `up` fails loudly rather than silently re-pulling — and it is only reached *after* the script's pull and migrate (same image) have succeeded under `set -euo pipefail`, so in practice the ref is always local. Fail-fast and diagnosable; no mitigation needed.
-- **Migrate cannot reach the DB.** Only if the migrate network were not `apps_internal` — verified it is (`apps-postgres-1` lives there; deploys work today). Would surface as a loud non-zero exit before `up`, caught by the dev rehearsal.
-- **Wrong/missing deploy dir.** The script `exit 1`s on a missing `/opt/apps/$DIR/docker-compose.yml`; `DIR` is a hardcoded, host-verified name, and any error is loud and caught pre-merge.
-- **Shared-script regression from `tayl0r/vps`.** A fleet-wide concern by design, not a reason for push-hub alone to keep a divergent copy; mitigated by the same rehearsal path every app has.
+- **Local image somehow absent at `up`.** The patched `up -d --pull never` fails loudly rather than silently re-pulling — and it is only reached *after* the explicit `docker pull "$IMAGE"` (pull #1) and the migrate `docker run` against that same image have already succeeded under the script's `set -e`, so in practice the ref is always local. Fail-fast and diagnosable; no mitigation needed.
+- **Migrate cannot reach the DB.** Only if the migrate network were not `apps_internal` — verified it is (`apps-postgres-1` lives there; deploys work today). Would surface as a loud non-zero exit before `up`, caught when dev deploys first (before prod).
+- **Wrong/missing deploy dir.** `cd "$DEPLOY_DIR"` fails loudly under `set -e` if the path is wrong; `DEPLOY_DIR` is an existing, host-verified Environment secret left untouched by this patch, and any error is loud and caught on the dev deploy that always runs first.
+- **Shared-script regression from `tayl0r/vps`.** N/A under the adopted Approach B — this risk applied only to Approach A's dependency on `/opt/apps/deploy.sh`, declined along with A (see Decision). The adopted inline patch has no shared-script dependency to regress.
 
 ---
 
 ## Out of scope / follow-ups
 
-- **tayl0r/push-hub#5** — delete the unused `DEPLOY_DIR` / `DEPLOY_NETWORK` Environment secrets after the first green dev + prod deploys (non-blocking; filed).
+- **tayl0r/push-hub#5** — **closed; not applicable under the adopted Approach B.** It proposed deleting the `DEPLOY_DIR` / `DEPLOY_NETWORK` Environment secrets, which was only safe under Approach A (whose shared-script call never reads them). Approach B's inline script still reads both directly, so they remain in use and must NOT be deleted.
 - No changes to the build/push job, the migrate command, the compose files, the shared script, or any other VPS host config. Had the migrate network *not* been `apps_internal`, the correct resolution would have been to add an optional, `apps_internal`-defaulting network arg to the shared `tayl0r/vps` script (not to fork push-hub) — but ground truth removed that fork.
 
 ---
@@ -225,6 +225,6 @@ No blocking ambiguity remains: every fork was resolved against verified fact or 
 ## Spec self-review
 
 - **Placeholders:** none — the exact final YAML is inline; no TODO/TBD.
-- **Internal consistency:** the recommendation, the exact change, the verification steps, and the assumptions all describe the same single Approach-A adoption; Approach B is consistently framed as the rejected alternative, never partially adopted; secret-dropping is stated once in the change and once (with the guard against premature deletion) in verification, without contradiction.
-- **Scope creep:** none — one file changes; the migrate command, compose files, and shared script are explicitly untouched; the one adjacent action (deleting dead secrets) is deferred to a filed, non-blocking issue rather than smuggled in.
+- **Internal consistency:** the Decision, "The change (adopted — Approach B, exact)", the verification steps, the assumptions, and the follow-ups all describe the same single Approach-B adoption; Approach A is retained in full as the adversarial review's recommendation but is consistently marked declined (title, headers, Recommendation section, Decision), never presented as active; the #5 secret-deletion follow-up is stated once, marked closed/not-applicable under B, without contradiction.
+- **Scope creep:** none — one file changes, two lines; the migrate command, compose files, secrets, and shared script are all explicitly untouched. The only adjacent action ever on the table — deleting the `DEPLOY_DIR`/`DEPLOY_NETWORK` secrets — was Approach-A-specific and is now moot: under the adopted Approach B those secrets stay in use, and the issue that proposed deleting them (**#5**) is closed, not deferred.
 - **Ambiguity:** the A-vs-B fork is resolved with a rubric- and fact-tied recommendation; every prior "unverifiable" was replaced with a verified fact or an honestly-labeled residual assumption; the change is specified as complete YAML, so an implementer has one interpretation.
