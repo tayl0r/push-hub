@@ -242,7 +242,7 @@ git commit -m "test: relocate engine unit tests into test/engine and repoint spe
 - Consumes: `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` from Task 1 (the frozen-lockfile install must match the regenerated lockfile).
 - Produces: nothing downstream.
 
-- [ ] **Step 1: Replace the Dockerfile**
+- [x] **Step 1: Replace the Dockerfile**
 
 `git` existed solely to clone the git-dependency at install time; the engine is now local source with no git deps. Remove `RUN apk add --no-cache git` and its explanatory comment, and trim the `COPY` comment so it no longer references the git-dep clone/`allowBuilds`-for-git-dep rationale — but keep the reason `pnpm-workspace.yaml` is copied (it still carries `esbuild`'s allowBuild) and keep the single-stage CMD note. Replace the entire file with:
 ```dockerfile
@@ -270,7 +270,7 @@ EXPOSE 3000
 CMD ["node", "dist/index.js"]
 ```
 
-- [ ] **Step 2: Verify git is gone and the frozen-lockfile install is coherent**
+- [x] **Step 2: Verify git is gone and the frozen-lockfile install is coherent**
 
 ```bash
 grep -n "apk add" Dockerfile && echo "FAIL: apk add still present" || echo "OK: no apk add"
@@ -278,7 +278,7 @@ corepack prepare pnpm@11.5.0 --activate && pnpm install --frozen-lockfile
 ```
 Expected: `OK: no apk add`; `pnpm install --frozen-lockfile` succeeds with no lockfile-mismatch error (proves the Task 1 lockfile matches the manifest under the pinned pnpm the Docker build uses).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add Dockerfile
