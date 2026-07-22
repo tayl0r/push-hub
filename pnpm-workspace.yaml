@@ -1,7 +1,7 @@
-# pnpm v11 gates build scripts (including a git dependency's `prepare`) behind this allowlist —
-# without it the engine git-dep's dist/ never builds. pnpm's allowBuilds key-matching changed
-# across 11.x, so package.json pins `packageManager: pnpm@11.5.0` to keep local dev and the Docker
-# build on the identical pnpm; this bare-name form is what that version matches.
+# pnpm v11 gates native build scripts behind this allowlist — without `esbuild` here,
+# pnpm silently skips its native postinstall build. pnpm's allowBuilds bare-name
+# key-matching changed across 11.x, so package.json pins `packageManager: pnpm@11.5.0`
+# to keep local dev and the Docker build on the identical pnpm; this bare-name form is
+# what that version matches.
 allowBuilds:
-  "@tsteil/push-service": true
   esbuild: true

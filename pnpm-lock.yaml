@@ -11,15 +11,18 @@ importers:
       '@sentry/node':
         specifier: ^10.0.0
         version: 10.66.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))
-      '@tsteil/push-service':
-        specifier: github:tayl0r/push-service#v1.1.1
-        version: https://codeload.github.com/tayl0r/push-service/tar.gz/57b206c220809e8efe3b901d1b9173b36562f27e
+      apns2:
+        specifier: ^12.2.0
+        version: 12.2.0
       drizzle-orm:
         specifier: ^0.38.0
         version: 0.38.4(@opentelemetry/api@1.9.1)(postgres@3.4.9)
       fastify:
         specifier: ^5.0.0
         version: 5.10.0
+      google-auth-library:
+        specifier: ^9.0.0
+        version: 9.15.1
       postgres:
         specifier: ^3.4.0
         version: 3.4.9
@@ -901,11 +904,6 @@ packages:
   '@sentry/server-utils@10.66.0':
     resolution: {integrity: sha512-h9EM9Wz9Mc6w2Vn7Fyh6ozjy4JC2UbUvWf9Ra1HYA4KMeYqjFA5/o0oB4pg4w/TF+rb+9OF/HNqxjuczxpudpA==}
     engines: {node: '>=18'}
-
-  '@tsteil/push-service@https://codeload.github.com/tayl0r/push-service/tar.gz/57b206c220809e8efe3b901d1b9173b36562f27e':
-    resolution: {gitHosted: true, integrity: sha512-XC+mAn5LoWfU6IXBLQl3qPtAZiT+ZcwJEDdRPuGrdJaZPL6jGPIuuGBJbEfk6B3APOtU40NJ+sJhvm5G9jFRsQ==, tarball: https://codeload.github.com/tayl0r/push-service/tar.gz/57b206c220809e8efe3b901d1b9173b36562f27e}
-    version: 1.1.1
-    engines: {node: '>=22'}
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
@@ -2094,14 +2092,6 @@ snapshots:
       '@sentry/conventions': 0.16.0
       '@sentry/core': 10.66.0
     transitivePeerDependencies:
-      - supports-color
-
-  '@tsteil/push-service@https://codeload.github.com/tayl0r/push-service/tar.gz/57b206c220809e8efe3b901d1b9173b36562f27e':
-    dependencies:
-      apns2: 12.2.0
-      google-auth-library: 9.15.1
-    transitivePeerDependencies:
-      - encoding
       - supports-color
 
   '@types/estree@1.0.9': {}

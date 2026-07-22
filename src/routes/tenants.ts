@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import type { ApnsConfig, FcmConfig } from '@tsteil/push-service'
+import type { ApnsConfig, FcmConfig } from '../engine/index.js'
 import { requireEnrollKey, requireTenant } from '../auth.js'
 import { TenantRegistry, InvalidCreds, SlugTaken } from '../registry.js'
 
