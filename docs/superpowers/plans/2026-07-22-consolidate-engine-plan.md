@@ -299,13 +299,13 @@ git commit -m "build: drop git from Dockerfile now that the engine is local sour
 
 A verbatim copy of INTEGRATION.md is NOT self-contained — it is written for external npm consumers of the published package. The three `@tsteil/push-service` occurrences (verified: lines 1, 116, 200 — the only ones in the file) must be adapted so the copy stands on its own and the final grep passes.
 
-- [ ] **Step 1: Copy INTEGRATION.md into the push-hub docs**
+- [x] **Step 1: Copy INTEGRATION.md into the push-hub docs**
 
 ```bash
 cp /Users/taylor/dev/push-service/docs/INTEGRATION.md docs/engine-integration.md
 ```
 
-- [ ] **Step 2: Retitle the heading (line 1)**
+- [x] **Step 2: Retitle the heading (line 1)**
 
 Replace:
 ```markdown
@@ -316,7 +316,7 @@ with:
 # push-hub's built-in push engine (`src/engine/`)
 ```
 
-- [ ] **Step 3: Repoint the import example (line ~116) to the internal module**
+- [x] **Step 3: Repoint the import example (line ~116) to the internal module**
 
 The example currently shows an external package import. Replace:
 ```ts
@@ -328,7 +328,7 @@ with the internal import that push-hub actually uses (nothing imports the engine
 import { createPushService, type PushTarget } from './engine/index.js'
 ```
 
-- [ ] **Step 4: Relabel the comparison-table column (line ~200)**
+- [x] **Step 4: Relabel the comparison-table column (line ~200)**
 
 Replace the table header row:
 ```markdown
@@ -339,14 +339,14 @@ with:
 | Concern | `expo-server-sdk` | push-hub engine (`src/engine`) |
 ```
 
-- [ ] **Step 5: Verify the adapted doc is self-contained**
+- [x] **Step 5: Verify the adapted doc is self-contained**
 
 ```bash
 grep -n "@tsteil/push-service\|tayl0r/push-service" docs/engine-integration.md && echo "FAIL: package refs remain" || echo "OK: self-contained"
 ```
 Expected: `OK: self-contained`.
 
-- [ ] **Step 6: Update the README's top-of-file engine reference (line ~4)**
+- [x] **Step 6: Update the README's top-of-file engine reference (line ~4)**
 
 `README.md` lines 3-5 currently read:
 ```markdown
@@ -361,7 +361,7 @@ tokens` mapping and sends **by user id**, using its built-in APNs/FCM engine
 (`src/engine/`).
 ```
 
-- [ ] **Step 7: Repoint the README integration-guide link (lines ~140-141)**
+- [x] **Step 7: Repoint the README integration-guide link (lines ~140-141)**
 
 `README.md` lines 140-143 currently read:
 ```markdown
@@ -377,14 +377,14 @@ tokens and provider credentials work; push-hub moves the storage, fan-out, and c
 server-side, shared across apps.
 ```
 
-- [ ] **Step 8: Verify the README no longer references the package**
+- [x] **Step 8: Verify the README no longer references the package**
 
 ```bash
 grep -n "@tsteil/push-service\|tayl0r/push-service" README.md && echo "FAIL: refs remain" || echo "OK: clean"
 ```
 Expected: `OK: clean`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add docs/engine-integration.md README.md
