@@ -1,8 +1,8 @@
 # push-hub
 
 A self-hosted, multi-tenant push-notification service. It owns the `user → device
-tokens` mapping and sends **by user id**, using [`@tsteil/push-service`](https://github.com/tayl0r/push-service)
-as its APNs/FCM sending engine.
+tokens` mapping and sends **by user id**, using its built-in APNs/FCM engine
+(`src/engine/`).
 
 Instead of every app storing its own device tokens, holding APNs/FCM credentials, and
 re-implementing dead-token cleanup, push-hub centralizes that behind two endpoints:
@@ -137,10 +137,9 @@ service registry is needed.
 3. On the server, call `POST /v1/send` with the target `userId`(s) — push-hub fans out
    across that user's devices and cleans up dead tokens.
 
-See [`@tsteil/push-service`](https://github.com/tayl0r/push-service)'s
-[integration guide](https://github.com/tayl0r/push-service/blob/main/docs/INTEGRATION.md)
-for how native tokens and provider credentials work; push-hub moves the storage, fan-out,
-and cleanup server-side, shared across apps.
+See the built-in engine's [integration guide](docs/engine-integration.md) for how native
+tokens and provider credentials work; push-hub moves the storage, fan-out, and cleanup
+server-side, shared across apps.
 
 ## License
 
