@@ -57,7 +57,7 @@ This is the heart of the PR. Copying the source, repointing the two consumers, a
 - Consumes: nothing (first task).
 - Produces: internal module `src/engine/index.ts` exporting `createPushService` and re-exporting types via `export * from './types.js'`. Named exports relied on downstream: value `createPushService`; types `ApnsConfig`, `FcmConfig`, `PushService`, `PushServiceConfig`, `PushTarget`. Import path from `src/`: `./engine/index.js`; from `src/routes/`: `../engine/index.js`.
 
-- [ ] **Step 1: Copy the 6 engine source files verbatim**
+- [x] **Step 1: Copy the 6 engine source files verbatim**
 
 The files' internal imports are already relative (`./apns.js`, `./fcm.js`, `./types.js`, …) and stay valid unchanged.
 
@@ -71,7 +71,7 @@ cp /Users/taylor/dev/push-service/src/index.ts       src/engine/index.ts
 cp /Users/taylor/dev/push-service/src/types.ts       src/engine/types.ts
 ```
 
-- [ ] **Step 2: Verify the copy landed and internal imports are relative**
+- [x] **Step 2: Verify the copy landed and internal imports are relative**
 
 ```bash
 ls src/engine/
@@ -79,7 +79,7 @@ grep -rn "@tsteil/push-service" src/engine/ || echo "OK: no package self-referen
 ```
 Expected: 6 `.ts` files listed; `OK: no package self-references`.
 
-- [ ] **Step 3: Repoint the `src/registry.ts` consumer import**
+- [x] **Step 3: Repoint the `src/registry.ts` consumer import**
 
 Replace the package specifier with the relative engine path. In `src/registry.ts`, the import block (lines 3-9) ends with:
 ```ts
@@ -91,7 +91,7 @@ Change that closing line to:
 ```
 (The imported names — `createPushService`, `ApnsConfig`, `FcmConfig`, `PushService`, `PushServiceConfig` — stay exactly as they are.)
 
-- [ ] **Step 4: Repoint the `src/routes/tenants.ts` consumer import**
+- [x] **Step 4: Repoint the `src/routes/tenants.ts` consumer import**
 
 In `src/routes/tenants.ts`, line 3 is:
 ```ts
@@ -102,14 +102,14 @@ Change it to:
 import type { ApnsConfig, FcmConfig } from '../engine/index.js'
 ```
 
-- [ ] **Step 5: Verify no consumer still references the package**
+- [x] **Step 5: Verify no consumer still references the package**
 
 ```bash
 grep -rn "@tsteil/push-service" src/
 ```
 Expected: no output.
 
-- [ ] **Step 6: Swap the dependencies in `package.json`**
+- [x] **Step 6: Swap the dependencies in `package.json`**
 
 In the `"dependencies"` block, remove the line:
 ```json
@@ -129,7 +129,7 @@ and add the engine's two direct runtime deps. The resulting `"dependencies"` blo
 ```
 `devDependencies` are unchanged (the engine's devDeps — `@types/node`, `typescript`, `vitest` — are already present).
 
-- [ ] **Step 7: Update `pnpm-workspace.yaml`**
+- [x] **Step 7: Update `pnpm-workspace.yaml`**
 
 Remove the `"@tsteil/push-service": true` allowBuild line and rewrite the comment to drop the git-dep `prepare`-build rationale while keeping the note on why `packageManager` pins `pnpm@11.5.0` (the surviving bare-name `esbuild: true` entry still depends on that pin, because pnpm's `allowBuilds` bare-name key-matching changed across 11.x). Replace the entire file with:
 ```yaml
@@ -142,7 +142,7 @@ allowBuilds:
   esbuild: true
 ```
 
-- [ ] **Step 8: Regenerate the lockfile with the pinned pnpm and install**
+- [x] **Step 8: Regenerate the lockfile with the pinned pnpm and install**
 
 ```bash
 corepack enable && corepack prepare pnpm@11.5.0 --activate
@@ -150,21 +150,21 @@ pnpm install
 ```
 Expected: install succeeds; `pnpm-lock.yaml` is updated — the git-dep subgraph is dropped and `apns2` + `google-auth-library` (plus their transitives) are added.
 
-- [ ] **Step 9: Verify the build is clean**
+- [x] **Step 9: Verify the build is clean**
 
 ```bash
 pnpm build
 ```
 Expected: `tsc` completes with no errors — in particular no unresolved `@tsteil/push-service`, `apns2`, or `google-auth-library` modules.
 
-- [ ] **Step 10: Verify the existing push-hub suite still passes**
+- [x] **Step 10: Verify the existing push-hub suite still passes**
 
 ```bash
 pnpm test
 ```
 Expected: all existing push-hub suites green (`app`, `auth`, `crypto`, `env`, `registry`, `send.route`, `store`, `tenants.route`, `tokens.route`) — requires the test-DB precondition (see Global Constraints); a DB-env failure in the `store`/`*.route` suites is an environment gap, not a defect in this change. The engine tests are relocated in Task 2.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/engine src/registry.ts src/routes/tenants.ts package.json pnpm-workspace.yaml pnpm-lock.yaml
