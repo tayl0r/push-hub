@@ -8,8 +8,12 @@ dev-flow:
 
 **Date:** 2026-07-21
 **Issue:** tayl0r/push-hub#4
-**Status:** design under adversarial review
-**Scope:** One CI file (`.github/workflows/deploy.yml`). Replace push-hub's inline SSH deploy script with a call to the fleet's shared VPS deploy script, `/opt/apps/deploy.sh`. This removes the redundant second GHCR pull (the issue's stated bug) and, in the same move, brings push-hub's deploy onto the same correct-by-default seam every other app on the VPS already uses. No application-code or VPS-host changes; the shared script already exists on the host.
+**Status:** **Approach B (minimal inline patch) adopted per user decision, 2026-07-22** — this overrides the adversarial review's Approach-A recommendation, which is retained below as the reasoned analysis of record. See **Decision**.
+**Scope:** One CI file (`.github/workflows/deploy.yml`). Remove the redundant second GHCR pull (the issue's stated bug) with a self-contained two-line edit — delete `docker compose pull` and pin `up` to the already-local image with `--pull never`. No new dependency on the shared VPS script; no application-code or VPS-host changes.
+
+## Decision (2026-07-22)
+
+**Adopt Approach B (the minimal, self-contained inline patch), not Approach A.** The adversarial review recommended Approach A (adopt the shared `/opt/apps/deploy.sh`) and its reasoning — preserved in full below — is sound. The user chose Approach B deliberately: keep the fix self-contained and minimal, and **avoid taking a runtime dependency on the `tayl0r/vps`-owned `/opt/apps/deploy.sh`** (the coupling flagged as assumption A2 — push-hub cannot pin that script's version). Accepted tradeoff: this removes only the redundant second pull (the issue's literal bug); pull #1 keeps no retry and the shared `/root/.docker/config.json` login, and push-hub stays a per-app copy of the deploy step rather than converging on the fleet seam. **The adopted change is Approach B's exact diff, in "The change" below.** Approach A's analysis and YAML are kept unchanged as the recorded, declined alternative.
 
 ---
 
@@ -102,11 +106,29 @@ Minimal survives only in the trivial sense that reverting the Approach-A PR rest
 
 ## Recommendation
 
-**Adopt Approach A.** It fixes the issue's redundant-pull bug *and* resolves the root flake (retry + isolated credential), it is the shared-boundary fix the rubric prefers for a known family, and every risk that once argued against it has been verified away against the live VPS. It is a single-file change, mirrors a pattern already proven green on this VPS, and deletes two now-meaningless secrets. Approach B is retained above only as the recorded rejected alternative.
+> **SUPERSEDED by the Decision above (2026-07-22): the user adopted Approach B.** The Approach-A recommendation below is the adversarial review's analysis, kept as the reasoned record — not the adopted plan.
+
+**[Review's recommendation — declined] Adopt Approach A.** It fixes the issue's redundant-pull bug *and* resolves the root flake (retry + isolated credential), it is the shared-boundary fix the rubric prefers for a known family, and every risk that once argued against it has been verified away against the live VPS. It is a single-file change, mirrors a pattern already proven green on this VPS, and deletes two now-meaningless secrets.
 
 ---
 
-## The change (Approach A, exact)
+## The change (adopted — Approach B, exact)
+
+Two lines in `.github/workflows/deploy.yml`'s `Migrate and deploy` SSH `script:` — delete the redundant `docker compose pull`, and pin `up` to the already-local image (fetched by the explicit `docker pull "$IMAGE"` that runs just above) with `--pull never`:
+
+```diff
+             cd "$DEPLOY_DIR"
+-            docker compose pull
+-            docker compose up -d
++            docker compose up -d --pull never
+             docker image prune -f
+```
+
+Nothing else changes: the explicit `docker pull "$IMAGE"`, the migrate `docker run`, the `DEPLOY_DIR`/`DEPLOY_NETWORK` secrets, the top-of-file comment, and every other job stay exactly as they are. Because the inline script still reads `DEPLOY_DIR`/`DEPLOY_NETWORK`, the Approach-A follow-up to delete those secrets (**#5**) does **not** apply under Approach B — #5 should be closed.
+
+---
+
+## The change — Approach A (reference only; NOT adopted)
 
 Replace the whole of `.github/workflows/deploy.yml` job body's SSH step and the surrounding `env:` with the following (unchanged parts — `on:`, `permissions:`, `concurrency:`, `environment:`, checkout, GHCR login, build-push — stay as they are; push-hub keeps its `workflow_dispatch`, `concurrency` group, and Environment-scoped `environment:` key, which the reference app does not have):
 
@@ -166,7 +188,9 @@ The goal ("exactly one GHCR round-trip") is checkable, and the change is rehears
 
 **Post-merge, dev then prod:** merging to `main` deploys **dev** only; **prod** deploys only on push to the `prod` branch — so dev is always exercised first. After each, confirm on the host: `docker ps` shows `push-hub{-,-dev}-push-hub-1` Up on the freshly pushed image digest, and the deploy-step log shows exactly one pull and no second round-trip.
 
-**Post-merge cleanup (tracked, non-blocking):** after the first green dev **and** prod deploys, delete the now-unreferenced `DEPLOY_DIR` / `DEPLOY_NETWORK` secrets from both Environments — filed as **tayl0r/push-hub#5** so it survives session boundaries. It must not be done earlier: the pre-merge `main` workflow still reads them.
+**Post-merge cleanup:** N/A under the adopted Approach B — the inline script still reads `DEPLOY_DIR`/`DEPLOY_NETWORK`, so they stay in use and are NOT deleted. (Issue **#5**, which proposed deleting them, was specific to Approach A and should be closed.)
+
+**Post-merge validation (the real test for this change):** there is no unit test for a CI-workflow edit; validation is the deploy itself. Merging to `main` deploys **dev**; confirm the deploy-step log shows the explicit `docker pull`, the migrate, then **no** `Pulling`/`docker compose pull` output before `up -d --pull never`, and `docker ps` shows `push-hub-dev-push-hub-1` Up on the new digest. Prod follows only on a push to the `prod` branch.
 
 ---
 
