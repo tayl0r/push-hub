@@ -69,6 +69,8 @@ jobs:
               --env-file "$DEPLOY_DIR/.env" \
               "$IMAGE" pnpm db:migrate
             cd "$DEPLOY_DIR"
-            docker compose pull
-            docker compose up -d
+            # Image is already local from the explicit `docker pull "$IMAGE"` above,
+            # and compose uses that same tag — so reuse it instead of a second GHCR
+            # round-trip (the redundant pull intermittently 403s on GHCR). See #4.
+            docker compose up -d --pull never
             docker image prune -f
