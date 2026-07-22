@@ -184,7 +184,7 @@ git commit -m "refactor: vendor push-service engine into src/engine and swap dep
 
 **Why the blanket rewrite is load-bearing:** every `../src/` specifier must become `../../src/engine/` — this covers **both** `import` statements **and** `vi.mock(...)` calls. `test/engine/index.test.ts` has two `vi.mock('../src/apns.js')` / `vi.mock('../src/fcm.js')` calls in addition to its `import … from '../src/index.js'`. A `vi.mock` path that does not resolve to the relocated module silently fails to intercept `src/engine/index.ts`'s `./apns.js` / `./fcm.js` imports, so the mocks would be ignored and that suite would break against the real transports. `../src/` is the only `../` target in these five files (verified — 7 occurrences total: apns×1, classify×1, concurrency×1, fcm×1, index×3), so a blanket rewrite is complete and safe. No vitest config change is needed: push-hub's default glob picks up `test/engine/*.test.ts`; these suites import `vitest` explicitly (no `globals` reliance) and are pure unit tests (mocked `apns2` / `google-auth-library` transports, no DB), so push-hub's DB `globalSetup` / `fileParallelism:false` settings are harmless.
 
-- [ ] **Step 1: Copy the 5 test files**
+- [x] **Step 1: Copy the 5 test files**
 
 ```bash
 mkdir -p test/engine
@@ -195,14 +195,14 @@ cp /Users/taylor/dev/push-service/test/fcm.test.ts         test/engine/fcm.test.
 cp /Users/taylor/dev/push-service/test/index.test.ts       test/engine/index.test.ts
 ```
 
-- [ ] **Step 2: Blanket-rewrite every `../src/` specifier to `../../src/engine/`**
+- [x] **Step 2: Blanket-rewrite every `../src/` specifier to `../../src/engine/`**
 
 Use `perl -i` (its `-i` behaves identically on macOS and Linux, unlike `sed -i`):
 ```bash
 perl -pi -e 's#\.\./src/#../../src/engine/#g' test/engine/*.test.ts
 ```
 
-- [ ] **Step 3: Verify the rewrite is complete (imports AND vi.mock)**
+- [x] **Step 3: Verify the rewrite is complete (imports AND vi.mock)**
 
 ```bash
 grep -rn "\.\./src/" test/engine/ && echo "FAIL: stale ../src/ remains" || echo "OK: no stale specifiers"
@@ -210,21 +210,21 @@ grep -rn "\.\./\.\./src/engine/" test/engine/ | wc -l
 ```
 Expected: `OK: no stale specifiers`, and the count is `7` (apns×1, classify×1, concurrency×1, fcm×1, index×3 including the two `vi.mock` calls).
 
-- [ ] **Step 4: Run the relocated engine suites**
+- [x] **Step 4: Run the relocated engine suites**
 
 ```bash
 pnpm test -- test/engine
 ```
 Expected: all 5 engine suites green.
 
-- [ ] **Step 5: Run the full suite (existing + relocated)**
+- [x] **Step 5: Run the full suite (existing + relocated)**
 
 ```bash
 pnpm test
 ```
 Expected: every suite green — the 9 existing push-hub suites plus the 5 relocated engine suites (full run needs the test-DB precondition; see Global Constraints). Step 4 above is the DB-independent proof that the relocation itself is correct.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add test/engine
