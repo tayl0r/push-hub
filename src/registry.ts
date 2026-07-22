@@ -6,7 +6,7 @@ import {
   type FcmConfig,
   type PushService,
   type PushServiceConfig,
-} from '@tsteil/push-service'
+} from './engine/index.js'
 import { tenants } from './db/schema.js'
 import { hashKey } from './auth.js'
 import { encrypt, decrypt } from './crypto.js'
