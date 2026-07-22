@@ -397,28 +397,28 @@ git commit -m "docs: vendor the engine integration guide and update README refer
 
 Run from the worktree root with the pinned pnpm active.
 
-- [ ] **`pnpm install` succeeds and the lockfile is settled**
+- [x] **`pnpm install` succeeds and the lockfile is settled**
 
 ```bash
 corepack prepare pnpm@11.5.0 --activate && pnpm install
 ```
 Expected: succeeds; no further lockfile changes.
 
-- [ ] **Build is clean (no dangling `@tsteil/push-service` resolution)**
+- [x] **Build is clean (no dangling `@tsteil/push-service` resolution)**
 
 ```bash
 pnpm build
 ```
 Expected: `tsc` clean.
 
-- [ ] **Full test suite green (existing push-hub + 5 relocated engine suites)**
+- [x] **Full test suite green (existing push-hub + 5 relocated engine suites)**
 
 ```bash
 pnpm test
 ```
 Expected: all suites pass (full run needs the test-DB precondition — see Global Constraints; `pnpm test -- test/engine` is the DB-independent check for the relocated engine suites).
 
-- [ ] **Scoped grep over the functional + user-facing surface returns nothing**
+- [x] **Scoped grep over the functional + user-facing surface returns nothing**
 
 This is deliberately scoped — do NOT run a `docs/`-wide grep (it always matches the immutable planning history under `docs/superpowers/` and can never pass).
 ```bash
@@ -427,4 +427,4 @@ grep -rn '@tsteil/push-service\|tayl0r/push-service' \
 ```
 Expected: no output.
 
-- [ ] **CI note (informational):** on push to `main`, CI builds `:dev` and deploys to `push-hub-dev.tsteil.com` first before any prod promotion — the safe surface for any Dockerfile breakage.
+- [x] **CI note (informational):** on push to `main`, CI builds `:dev` and deploys to `push-hub-dev.tsteil.com` first before any prod promotion — the safe surface for any Dockerfile breakage.
