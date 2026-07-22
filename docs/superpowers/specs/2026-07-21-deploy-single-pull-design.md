@@ -9,6 +9,8 @@ dev-flow:
 **Date:** 2026-07-21
 **Issue:** tayl0r/push-hub#4
 **Status:** **Approach B (minimal inline patch) adopted per user decision, 2026-07-22** — this overrides the adversarial review's Approach-A recommendation, which is retained below as the reasoned analysis of record. See **Decision**.
+
+> **SUPERSEDED 2026-07-22 by [tayl0r/push-hub#7](https://github.com/tayl0r/push-hub/issues/7).** The Approach-B decision recorded here was reversed: push-hub now adopts **Approach A** — delegate the deploy to the fleet's shared `/opt/apps/deploy.sh`. Issue #7 is the record of that reversal and implements the exact YAML in "The change — Approach A" below. Everything below is kept unchanged as the prior decision-of-record; read Approach A (not Approach B) for the shipped behavior.
 **Scope:** One CI file (`.github/workflows/deploy.yml`). Remove the redundant second GHCR pull (the issue's stated bug) with a self-contained two-line edit — delete `docker compose pull` and pin `up` to the already-local image with `--pull never`. No new dependency on the shared VPS script; no application-code or VPS-host changes.
 
 ## Decision (2026-07-22)

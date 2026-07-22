@@ -1,12 +1,14 @@
 name: Deploy
 
-# Build the image, push it to GHCR, then deploy over SSH.
-#   main -> ghcr.io/tayl0r/push-hub:dev
-#   prod -> ghcr.io/tayl0r/push-hub:prod
-# Host, SSH credentials, the deploy directory, and the internal Docker network
-# are all host-side config, supplied here only as GitHub Environment secrets
-# (see the "dev" / "prod" environments in repo settings) — none of it is
-# hardcoded in this file.
+# Build the image, push it to GHCR, then deploy over SSH by delegating to the
+# fleet's shared /opt/apps/deploy.sh on the VPS (canonical copy: tayl0r/vps
+# deploy/app-deploy.sh) — one isolated GHCR login, a single retried pull, the
+# migrate, then `up -d --pull never` + image prune, all owned by that script.
+#   main -> ghcr.io/tayl0r/push-hub:dev  (deploy dir push-hub-dev)
+#   prod -> ghcr.io/tayl0r/push-hub:prod (deploy dir push-hub)
+# Host and SSH credentials are host-side config, supplied only as GitHub
+# Environment secrets (see the "dev" / "prod" environments in repo settings);
+# the per-env deploy dir is the plain DIR workflow env below.
 on:
   push:
     branches: [main, prod]
@@ -26,6 +28,7 @@ jobs:
     environment: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
     env:
       IMAGE_TAG: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
+      DIR: ${{ github.ref_name == 'prod' && 'push-hub' || 'push-hub-dev' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,29 +51,19 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
           IMAGE: ghcr.io/tayl0r/push-hub:${{ env.IMAGE_TAG }}
-          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-          DEPLOY_NETWORK: ${{ secrets.DEPLOY_NETWORK }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GITHUB_TOKEN,GITHUB_ACTOR,IMAGE,DEPLOY_DIR,DEPLOY_NETWORK
+          envs: GITHUB_TOKEN,GITHUB_ACTOR,IMAGE,DIR
+          # Shared fleet deploy logic lives in /opt/apps/deploy.sh on the VPS
+          # (canonical copy: tayl0r/vps deploy/app-deploy.sh) — isolated GHCR
+          # login, single pull with retry, migrate, then `up -d --pull never`,
+          # then image prune. Args 3+ are this app's migrate command; the script
+          # runs it in the freshly pulled image (which carries devDeps + src/ —
+          # see Dockerfile) on the apps_internal network with /opt/apps/$DIR/.env.
           script: |
-            set -e
-            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-            docker pull "$IMAGE"
-            # Run migrations from the freshly pulled image before the new
-            # container starts — the image carries devDeps + src/ for this
-            # (see Dockerfile). DEPLOY_DIR/.env holds this environment's
-            # DATABASE_URL and the rest of the service config.
-            docker run --rm \
-              --network "$DEPLOY_NETWORK" \
-              --env-file "$DEPLOY_DIR/.env" \
-              "$IMAGE" pnpm db:migrate
-            cd "$DEPLOY_DIR"
-            # Image is already local from the explicit `docker pull "$IMAGE"` above,
-            # and compose uses that same tag — so reuse it instead of a second GHCR
-            # round-trip (the redundant pull intermittently 403s on GHCR). See #4.
-            docker compose up -d --pull never
-            docker image prune -f
+            export GITHUB_TOKEN GITHUB_ACTOR
+            /opt/apps/deploy.sh "$DIR" "$IMAGE" pnpm db:migrate
