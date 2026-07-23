@@ -77,7 +77,7 @@ Adds the dependency, creates the module with its dedicated registry, default pro
   - `export async function dbTimed<T>(operation: DbOperation, fn: () => Promise<T>): Promise<T>`
   - `test/helpers/metrics.ts`: `export async function readSeries(fullName: string, labels?: Record<string, string>): Promise<number | undefined>`
 
-- [ ] **Step 1: Add the dependency**
+- [x] **Step 1: Add the dependency**
 
 Run:
 ```bash
@@ -89,7 +89,7 @@ node -e "console.log(require('./package.json').dependencies['prom-client'])"
 ```
 Expected: prints `^15.1.3` (or a newer `^15.x`).
 
-- [ ] **Step 2: Write the shared helper and the failing test**
+- [x] **Step 2: Write the shared helper and the failing test**
 
 Create `test/helpers/metrics.ts`:
 ```ts
@@ -152,12 +152,12 @@ describe('dbTimed', () => {
 })
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/metrics.test.ts`
 Expected: FAIL — cannot resolve `../src/metrics.js` (the module does not exist yet; both the test file and `test/helpers/metrics.ts` import it).
 
-- [ ] **Step 4: Write minimal implementation**
+- [x] **Step 4: Write minimal implementation**
 
 Create `src/metrics.ts`:
 ```ts
@@ -233,12 +233,12 @@ export async function dbTimed<T>(operation: DbOperation, fn: () => Promise<T>): 
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/metrics.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml src/metrics.ts test/helpers/metrics.ts test/metrics.test.ts
