@@ -861,7 +861,7 @@ EOF
 - Consumes: `registerHttpMetrics` (Task 2); `readSeries` from `test/helpers/metrics.ts` (Task 1).
 - Produces: no signature changes; `buildApp` now records RED metrics for every request.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `test/app.test.ts`: add `import { register } from '../src/metrics.js'` and `import { readSeries } from './helpers/metrics.js'`, add `register.resetMetrics()` to `beforeEach`, and two new tests.
 
@@ -886,12 +886,12 @@ Add these tests inside `describe('buildApp', ...)`:
   })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/app.test.ts`
 Expected: FAIL — `http_requests_total` has no series (hooks aren't installed yet).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Replace the entire contents of `src/app.ts` with:
 ```ts
@@ -913,12 +913,12 @@ export function buildApp(deps: { db: any; registry: TenantRegistry; enrollKey: s
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/app.test.ts`
 Expected: PASS (all app tests, including the two new ones).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app.ts test/app.test.ts
