@@ -1,3 +1,4 @@
+import http from 'node:http'
 import { collectDefaultMetrics, Counter, Gauge, Histogram, Registry } from 'prom-client'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 
@@ -63,6 +64,35 @@ const httpRequestsInFlight = new Gauge({
   registers: [register],
 })
 
+// ---- Sampled gauges ----
+// Deps for the sampled gauges, injected at boot by registerSampledGauges().
+// Mutable module state rather than constructor args: prom-client's Gauge type only
+// accepts `collect` in the constructor config (it is not an assignable class property),
+// but the count fns aren't known until index.ts has a db + registry.
+let sampledDeps: { tenantsCount: () => number; tokensCount: () => Promise<number> } | undefined
+
+const tenantsGauge = new Gauge({
+  name: 'tenants',
+  help: 'Number of tenants currently loaded in the registry.',
+  registers: [register],
+  collect() {
+    if (sampledDeps) this.set(sampledDeps.tenantsCount())
+  },
+})
+const pushTokensGauge = new Gauge({
+  name: 'push_tokens',
+  help: 'Number of rows in the push_tokens table (sampled at scrape).',
+  registers: [register],
+  async collect() {
+    if (!sampledDeps) return
+    try {
+      this.set(await sampledDeps.tokensCount())
+    } catch {
+      // Leave the previous value on a transient DB error rather than blank the whole scrape.
+    }
+  },
+})
+
 /** Set app_build_info=1 with the running version + commit. Call once at boot. */
 export function setBuildInfo(info: { version: string; commit: string }): void {
   buildInfo.labels(info.version, info.commit).set(1)
@@ -123,4 +153,32 @@ export function registerHttpMetrics(app: FastifyInstance): void {
 
   app.addHook('onRequestAbort', async (request) => { settle(request) })
   app.addHook('onTimeout', async (request) => { settle(request) })
+}
+
+/** Serve ONLY GET /metrics on a bare http server, bound 0.0.0.0. No Fastify, no router label. */
+export function startMetricsServer(port: number): http.Server {
+  const server = http.createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url === '/metrics') {
+      try {
+        const body = await register.metrics()
+        res.writeHead(200, { 'Content-Type': register.contentType })
+        res.end(body)
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' })
+        res.end(err instanceof Error ? err.message : String(err))
+      }
+      return
+    }
+    res.writeHead(404).end()
+  })
+  server.listen(port, '0.0.0.0')
+  return server
+}
+
+/** Inject the live-count fns the sampled gauges' collect() callbacks read at each scrape. Call at boot; last call wins. */
+export function registerSampledGauges(deps: {
+  tenantsCount: () => number
+  tokensCount: () => Promise<number>
+}): void {
+  sampledDeps = deps
 }

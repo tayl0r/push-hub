@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { register, recordSend, setBuildInfo, dbTimed, registerHttpMetrics } from '../src/metrics.js'
+import { once } from 'node:events'
+import type { AddressInfo } from 'node:net'
+import { register, recordSend, setBuildInfo, dbTimed, registerHttpMetrics, startMetricsServer, registerSampledGauges } from '../src/metrics.js'
 import { readSeries } from './helpers/metrics.js'
 
 beforeEach(() => { register.resetMetrics() })
@@ -74,5 +76,41 @@ describe('registerHttpMetrics', () => {
     await h.onResponse(req, { statusCode: 200 }) // settle #2 is a no-op (entry already removed)
     expect(await readSeries('http_requests_in_flight')).toBe(0)
     expect(await readSeries('http_requests_total', { method: 'GET', route: '/health', status: '200' })).toBeUndefined()
+  })
+})
+
+describe('startMetricsServer', () => {
+  it('serves GET /metrics and 404s everything else', async () => {
+    const server = startMetricsServer(0)
+    if (!server.listening) await once(server, 'listening')
+    const { port } = server.address() as AddressInfo
+    try {
+      const ok = await fetch(`http://127.0.0.1:${port}/metrics`)
+      expect(ok.status).toBe(200)
+      expect(ok.headers.get('content-type')).toContain('text/plain')
+      const other = await fetch(`http://127.0.0.1:${port}/nope`)
+      expect(other.status).toBe(404)
+    } finally {
+      server.close()
+    }
+  })
+})
+
+describe('registerSampledGauges', () => {
+  it('reads injected tenant and token counts at collect time', async () => {
+    registerSampledGauges({ tenantsCount: () => 5, tokensCount: async () => 12 })
+    expect(await readSeries('tenants')).toBe(5)
+    expect(await readSeries('push_tokens')).toBe(12)
+  })
+
+  it('leaves the previous push_tokens value when the count query throws', async () => {
+    let fail = false
+    registerSampledGauges({
+      tenantsCount: () => 1,
+      tokensCount: async () => { if (fail) throw new Error('db down'); return 9 },
+    })
+    expect(await readSeries('push_tokens')).toBe(9)
+    fail = true
+    expect(await readSeries('push_tokens')).toBe(9) // retained: collect swallowed the error
   })
 })
