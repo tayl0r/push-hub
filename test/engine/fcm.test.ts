@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 const getAccessToken = vi.fn(async () => ({ token: 'oauth-token' }))
 vi.mock('google-auth-library', () => ({
@@ -15,8 +15,6 @@ const note = { title: 'T', body: 'B', data: { k: 'v' } }
 function mockFetch(status: number, body: unknown) {
   return vi.fn(async () => ({ ok: status < 400, status, json: async () => body }))
 }
-
-beforeEach(() => { getAccessToken.mockClear() })
 
 describe('FcmTransport', () => {
   it('un-escapes the private key at construction', () => {

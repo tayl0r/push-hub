@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 // Mock transports so orchestration is tested in isolation. Outcome is derived from a
 // convention in the token string so a single batch can mix delivered/failed/invalid, and
@@ -33,7 +33,6 @@ import { createPushService } from '../../src/engine/index.js'
 const note = { title: 'T', body: 'B' }
 
 describe('createPushService', () => {
-  beforeEach(() => { apnsClose.mockClear(); fcmClose.mockClear() })
   it('routes each target to its provider and preserves refs', async () => {
     const push = createPushService({ apns: {} as any, fcm: {} as any })
     const results = await push.send({
