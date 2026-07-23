@@ -321,7 +321,7 @@ Delete the APNs throw site (`src/engine/apns.ts:53`, `if (c.kind === 'config') t
 - Consumes: `SendStatus` including `'config'` (Task 1); `mapWithConcurrency(items, limit, fn, onError)` (Task 2).
 - Produces: `ApnsTransport.send(targets: PushTarget[], n: PushNotification): Promise<SendResult[]>` — unchanged signature, but it now **never rejects for a per-target reason**. Emits only `delivered | failed | invalid | config`; never `unconfigured`, never `error`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `test/engine/apns.test.ts`, replace lines 64-68 (the `'InvalidProviderToken → throws (fail-loud)'` case) with these two cases:
 
@@ -356,12 +356,12 @@ In `test/engine/apns.test.ts`, replace lines 64-68 (the `'InvalidProviderToken �
 
 (The mocked `Notification` class at `test/engine/apns.test.ts:23` stores the token as its `deviceToken` field, which is what the keyed `mockImplementation` reads.)
 
-- [ ] **Step 2: Run the APNs tests to verify they fail**
+- [x] **Step 2: Run the APNs tests to verify they fail**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/engine/apns.test.ts`
 Expected: FAIL — both new cases reject with the `ApnsError` (`APNS Error: 403 - InvalidProviderToken` / `- ExpiredProviderToken`) instead of resolving, because the transport still rethrows on `config` and the Task 2 shim propagates it.
 
-- [ ] **Step 3: Move the catch body into `onError` in `src/engine/apns.ts`**
+- [x] **Step 3: Move the catch body into `onError` in `src/engine/apns.ts`**
 
 Replace the whole `send` method — everything from the `async send(targets: PushTarget[], n: PushNotification)` line through the method's closing `}`, including the Task 2 shim — with:
 
@@ -393,12 +393,12 @@ Replace the whole `send` method — everything from the `async send(targets: Pus
 
 Notes for the implementer: the old per-target `reasonOf` closure (old line 43) is inlined into `onError` above and no longer exists; there is no `try` block left in this file's `send`. `retryTransient` is untouched — `config` is not `transient`, so its predicate is already false and a config fault still costs exactly one provider round-trip per target.
 
-- [ ] **Step 4: Run the APNs tests to verify they pass**
+- [x] **Step 4: Run the APNs tests to verify they pass**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/engine/apns.test.ts`
 Expected: PASS — all cases, including the unchanged `BadDeviceToken → invalid`, the two retry cases, and the two new ones.
 
-- [ ] **Step 5: Verify the APNs throw site is gone, then build and run the full suite**
+- [x] **Step 5: Verify the APNs throw site is gone, then build and run the full suite**
 
 Run: `cd /Users/taylor/dev/push-hub && git grep -n 'throw e' -- src/engine/apns.ts`
 Expected: **no matches** (exit code 1) — both the old `config` throw site and the Task 2 shim are gone from this file. Scoped to `apns.ts` on purpose: `src/engine/fcm.ts` still matches if Task 4 has not run yet, and `retryTransient`'s `throw e` in `src/engine/concurrency.ts` is legitimate and stays.
@@ -406,7 +406,7 @@ Expected: **no matches** (exit code 1) — both the old `config` throw site and 
 Run: `cd /Users/taylor/dev/push-hub && pnpm build && pnpm test`
 Expected: build exits 0; **every test file PASS, zero failures.** In particular `test/engine/index.test.ts`'s `'propagates a transport config error (fail-loud) out of send()'` still passes even though it asserts a rejection — that file mocks the `ApnsTransport` / `FcmTransport` classes wholesale, so it never runs the real APNs code this task changed. (That case is rewritten in Task 5.) If anything fails here, stop and investigate before committing.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/taylor/dev/push-hub
