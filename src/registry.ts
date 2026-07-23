@@ -10,6 +10,7 @@ import {
 import { tenants } from './db/schema.js'
 import { hashKey } from './auth.js'
 import { encrypt, decrypt } from './crypto.js'
+import { dbTimed } from './metrics.js'
 
 type Db = any // drizzle instance; kept loose so the registry works with the app db and the test db (matches store.ts)
 type BuildEngine = (config: PushServiceConfig) => PushService
@@ -49,7 +50,10 @@ export class TenantRegistry implements TenantLookup {
 
   // Boot load: decrypt + build every tenant, throwing on any failure (fail the deploy, not the first send).
   async load(): Promise<void> {
-    const rows = await this.db.select().from(tenants)
+    // dbTimed<any[]>: this.db is `any`; without the type arg T infers `unknown`
+    // and the `for (const row of rows)` iteration fails tsc (same reason as
+    // store.ts removeToken). insert/update below discard their result, so they don't need it.
+    const rows = await dbTimed<any[]>('tenants_load', () => this.db.select().from(tenants))
     for (const row of rows) {
       const creds = JSON.parse(decrypt(this.credKey, row.credsEncrypted)) as PushServiceConfig
       const engine = this.buildEngine(creds)
@@ -64,7 +68,7 @@ export class TenantRegistry implements TenantLookup {
     const credsEncrypted = encrypt(this.credKey, JSON.stringify(creds))
     const engine = this.buildOrThrow(creds)                           // engine built last — nothing throwing sits between this and the teardown try
     try {
-      await this.db.insert(tenants).values({ slug: input.slug, apiKeyHash, credsEncrypted })
+      await dbTimed('tenant_insert', () => this.db.insert(tenants).values({ slug: input.slug, apiKeyHash, credsEncrypted }))
     } catch (err) {
       await engine.close().catch(() => {})                       // don't leak the engine we built if the insert failed (e.g. a taken slug)
       if (isUniqueViolation(err)) throw new SlugTaken(input.slug) // any 23505 on insert = taken slug
@@ -78,7 +82,7 @@ export class TenantRegistry implements TenantLookup {
     const credsEncrypted = encrypt(this.credKey, JSON.stringify(creds))
     const engine = this.buildOrThrow(creds)                           // engine built last — nothing throwing sits between this and the teardown try
     try {
-      await this.db.update(tenants).set({ credsEncrypted, updatedAt: new Date() }).where(eq(tenants.apiKeyHash, tenant.apiKeyHash))
+      await dbTimed('tenant_update', () => this.db.update(tenants).set({ credsEncrypted, updatedAt: new Date() }).where(eq(tenants.apiKeyHash, tenant.apiKeyHash)))
     } catch (err) {
       await engine.close().catch(() => {}) // don't leak the engine we built if the UPDATE failed
       throw err

@@ -7,6 +7,8 @@ import * as schema from '../src/db/schema.js'
 import { tenants } from '../src/db/schema.js'
 import { TenantRegistry, InvalidCreds, SlugTaken } from '../src/registry.js'
 import { hashKey } from '../src/auth.js'
+import { register } from '../src/metrics.js'
+import { readSeries } from './helpers/metrics.js'
 
 const client = postgres(process.env.TEST_DATABASE_URL!)
 const db = drizzle(client, { schema })
@@ -25,7 +27,7 @@ const buildEngine = vi.fn((cfg: any) => {
 const registry = () => new TenantRegistry({ db, credKey, buildEngine })
 const apns = { keyId: 'K', teamId: 'T', bundleId: 'com.x.y', signingKey: 'sk', production: true }
 
-beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE tenants`); buildEngine.mockClear(); engines.length = 0 })
+beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE tenants`); buildEngine.mockClear(); engines.length = 0; register.resetMetrics() })
 afterAll(async () => { await client.end() })
 
 describe('TenantRegistry', () => {
@@ -114,5 +116,26 @@ describe('TenantRegistry', () => {
     expect(r.byKeyHash(hashKey(apiKey))!.engine).toBe(before.engine)  // map entry unchanged
 
     spy.mockRestore()
+  })
+
+  it('times the insert under operation="tenant_insert"', async () => {
+    await registry().register({ slug: 'team-comm', apns })
+    expect(await readSeries('db_query_duration_seconds_count', { operation: 'tenant_insert' })).toBe(1)
+  })
+
+  it('times load under operation="tenants_load"', async () => {
+    await registry().register({ slug: 'team-comm', apns })
+    register.resetMetrics()
+    await registry().load()
+    expect(await readSeries('db_query_duration_seconds_count', { operation: 'tenants_load' })).toBe(1)
+  })
+
+  it('times updateCredentials under operation="tenant_update"', async () => {
+    const r = registry()
+    const { apiKey } = await r.register({ slug: 'team-comm', apns })
+    const before = r.byKeyHash(hashKey(apiKey))!
+    register.resetMetrics()
+    await r.updateCredentials(before, { fcm: { projectId: 'p', clientEmail: 'e', privateKey: 'k' } })
+    expect(await readSeries('db_query_duration_seconds_count', { operation: 'tenant_update' })).toBe(1)
   })
 })
