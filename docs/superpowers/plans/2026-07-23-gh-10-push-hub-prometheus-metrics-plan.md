@@ -754,7 +754,7 @@ EOF
 - Consumes: `dbTimed` (Task 1); `readSeries` from `test/helpers/metrics.ts` (Task 1). Uses operations `tenants_load`, `tenant_insert`, `tenant_update`.
 - Produces: no signature changes.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `test/registry.test.ts`: add `import { register } from '../src/metrics.js'` and `import { readSeries } from './helpers/metrics.js'`, add `register.resetMetrics()` to `beforeEach`, and three tests.
 
@@ -786,12 +786,12 @@ Add these tests inside `describe('TenantRegistry', ...)`:
   })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/registry.test.ts`
 Expected: FAIL — `db_query_duration_seconds_count` has no `tenant_insert`/`tenants_load`/`tenant_update` series (queries aren't wrapped yet).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/registry.ts`:
 
@@ -806,7 +806,10 @@ In `load()`, wrap the select. Replace:
 ```
 with:
 ```ts
-    const rows = await dbTimed('tenants_load', () => this.db.select().from(tenants))
+    // dbTimed<any[]>: this.db is `any`; without the type arg T infers `unknown`
+    // and the `for (const row of rows)` iteration fails tsc (same reason as
+    // store.ts removeToken). insert/update below discard their result, so they don't need it.
+    const rows = await dbTimed<any[]>('tenants_load', () => this.db.select().from(tenants))
 ```
 
 In `register()`, wrap the insert. Replace:
@@ -827,12 +830,12 @@ with:
       await dbTimed('tenant_update', () => this.db.update(tenants).set({ credsEncrypted, updatedAt: new Date() }).where(eq(tenants.apiKeyHash, tenant.apiKeyHash)))
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/registry.test.ts`
 Expected: PASS (all registry tests, including the three new ones). Note the existing "closes the engine it built when the UPDATE fails" test still passes: its `db.update` spy throws synchronously inside `dbTimed`'s `fn()`, which the `finally` settles and rethrows unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/registry.ts test/registry.test.ts
