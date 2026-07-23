@@ -55,12 +55,61 @@ describe('FcmTransport', () => {
     expect(r.status).toBe('failed')
   })
 
-  it('401 UNAUTHENTICATED → throws (fail-loud config error)', async () => {
+  it('401 UNAUTHENTICATED → a config result, not a throw', async () => {
     vi.stubGlobal('fetch', mockFetch(401, {
       error: { code: 401, status: 'UNAUTHENTICATED', message: 'request had invalid authentication credentials' },
     }))
     const t = new FcmTransport(config)
-    await expect(t.send([{ token: 'tok', provider: 'fcm' }], note)).rejects.toThrow()
+    const [r] = await t.send([{ token: 'tok', provider: 'fcm', ref: 'r-cfg' }], note)
+    expect(r).toMatchObject({ ref: 'r-cfg', provider: 'fcm', status: 'config', error: 'UNAUTHENTICATED' })
+    expect(r!.retryable).toBeUndefined()
+  })
+
+  // A 403 carrying errorCode SENDER_ID_MISMATCH classifies `invalid` (classify.ts checks the
+  // FCM code BEFORE the status-code rule), so this fixture deliberately omits details[] to
+  // exercise the config branch.
+  it('403 PERMISSION_DENIED with no FcmError detail → a config result', async () => {
+    vi.stubGlobal('fetch', mockFetch(403, {
+      error: { code: 403, status: 'PERMISSION_DENIED', message: 'the caller does not have permission' },
+    }))
+    const t = new FcmTransport(config)
+    const [r] = await t.send([{ token: 'tok', provider: 'fcm', ref: 'r-403' }], note)
+    expect(r).toMatchObject({ status: 'config', error: 'PERMISSION_DENIED' })
+  })
+
+  // Pins src/engine/fcm.ts's `no access token` throw: it is raised inside `attempt`, so it
+  // must be routed through onError's FcmError branch rather than escaping send().
+  it('no access token → a config result', async () => {
+    getAccessToken.mockResolvedValueOnce({ token: undefined } as any)
+    vi.stubGlobal('fetch', mockFetch(200, {}))
+    const t = new FcmTransport(config)
+    const [r] = await t.send([{ token: 'tok', provider: 'fcm', ref: 'r-tok' }], note)
+    expect(r).toMatchObject({ status: 'config', error: 'no access token' })
+  })
+
+  it('a config fault on one target does not discard its siblings', async () => {
+    // Keyed on the request body's message.token, NOT on call order — targets run concurrently.
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: any) => {
+      const token = JSON.parse(init.body).message.token
+      if (token === 'bad') {
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ error: { code: 401, status: 'UNAUTHENTICATED', message: 'bad creds' } }),
+        }
+      }
+      return { ok: true, status: 200, json: async () => ({ name: 'projects/proj/messages/1' }) }
+    }))
+    const t = new FcmTransport(config)
+    const results = await t.send([
+      { token: 'ok1', provider: 'fcm', ref: 'r1' },
+      { token: 'bad', provider: 'fcm', ref: 'r2' },
+      { token: 'ok2', provider: 'fcm', ref: 'r3' },
+    ], note)
+    expect(results).toHaveLength(3)
+    expect(results.map(r => r.status)).toEqual(['delivered', 'config', 'delivered'])
+    expect(results.map(r => r.ref)).toEqual(['r1', 'r2', 'r3'])
+    expect(results[1]!.error).toBe('UNAUTHENTICATED')
   })
 
   it('sends high android priority and string data', async () => {
