@@ -192,7 +192,7 @@ Make "no per-item throw may discard the batch" a property of the shared mapper's
   Contract: resolves an array of `items.length` results in input order. If `fn` rejects for item `i`, slot `i` holds `onError(items[i], error)` and every other slot holds its real result. The returned promise rejects **only** if `onError` itself throws.
   `sleep` and `retryTransient` keep their current signatures and are untouched.
 
-- [ ] **Step 1: Update the existing concurrency test for the fourth argument and write the failing new test**
+- [x] **Step 1: Update the existing concurrency test for the fourth argument and write the failing new test**
 
 Replace the whole `describe('mapWithConcurrency', ...)` block in `test/engine/concurrency.test.ts` (lines 4-16) with:
 
@@ -228,12 +228,12 @@ describe('mapWithConcurrency', () => {
 
 `vi` is already imported on line 1 of that file. Leave the `describe('retryTransient', ...)` block untouched.
 
-- [ ] **Step 2: Run the concurrency test to verify it fails**
+- [x] **Step 2: Run the concurrency test to verify it fails**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/engine/concurrency.test.ts`
 Expected: FAIL — "maps a throwing item via onError in place…" rejects with `Error: boom` (today `mapWithConcurrency` has no `try/catch`, so the worker's rejection propagates).
 
-- [ ] **Step 3: Implement the new signature in `src/engine/concurrency.ts`**
+- [x] **Step 3: Implement the new signature in `src/engine/concurrency.ts`**
 
 Replace lines 5-21 (the whole `mapWithConcurrency` function) with:
 
@@ -273,7 +273,7 @@ export async function mapWithConcurrency<T, R>(
 
 Leave `sleep` (lines 1-3) and `retryTransient` (lines 23-38) exactly as they are.
 
-- [ ] **Step 4: Add the temporary rethrow shims so the tree still compiles**
+- [x] **Step 4: Add the temporary rethrow shims so the tree still compiles**
 
 These two shims preserve today's exact behavior (a throw from `fn` still propagates out of `mapWithConcurrency`) and exist for one commit each. Task 3 deletes the APNs one; Task 4 deletes the FCM one. Nothing else in either file changes in this task.
 
@@ -294,12 +294,12 @@ In `src/engine/fcm.ts`, the `send` method ends the same way at line 81 with `   
 
 `SendResult` is already imported (type-only) in both files, so no import changes are needed.
 
-- [ ] **Step 5: Verify the build and the full suite are green**
+- [x] **Step 5: Verify the build and the full suite are green**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm build && pnpm test`
 Expected: build exits 0; PASS on every file. `test/engine/concurrency.test.ts` now has 3 passing `mapWithConcurrency` cases, and every APNs/FCM/orchestrator test still passes unchanged — the shims mean no observable behavior moved in this task.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/taylor/dev/push-hub
