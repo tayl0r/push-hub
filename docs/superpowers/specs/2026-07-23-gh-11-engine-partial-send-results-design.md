@@ -1,7 +1,7 @@
 ---
 dev-flow:
   slug: gh-11-engine-partial-send-results
-  stops: [post-design]
+  stops: []
 ---
 
 # Engine: partial send results — a config fault must not discard the batch — Design
