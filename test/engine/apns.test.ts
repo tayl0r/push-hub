@@ -61,10 +61,31 @@ describe('ApnsTransport', () => {
     expect(r.status).toBe('invalid')
   })
 
-  it('InvalidProviderToken → throws (fail-loud)', async () => {
+  it('InvalidProviderToken → a config result, not a throw', async () => {
     send.mockRejectedValue(apnsError('InvalidProviderToken', 403))
     const t = new ApnsTransport(config)
-    await expect(t.send([{ token: 'tok', provider: 'apns' }], note)).rejects.toThrow()
+    const [r] = await t.send([{ token: 'tok', provider: 'apns', ref: 'r-cfg' }], note)
+    expect(r).toMatchObject({ ref: 'r-cfg', provider: 'apns', status: 'config', error: 'InvalidProviderToken' })
+    expect(r!.retryable).toBeUndefined() // config is not retryable — absent, matching `invalid`
+  })
+
+  it('a config fault on one target does not discard its siblings', async () => {
+    // Keyed on the notification's deviceToken, NOT on call order: the 3 targets are dispatched
+    // concurrently, so a mockRejectedValueOnce chain would depend on worker scheduling.
+    send.mockImplementation(async (n: any) => {
+      if (n.deviceToken === 'bad') throw apnsError('ExpiredProviderToken', 403)
+      return undefined
+    })
+    const t = new ApnsTransport(config)
+    const results = await t.send([
+      { token: 'ok1', provider: 'apns', ref: 'r1' },
+      { token: 'bad', provider: 'apns', ref: 'r2' },
+      { token: 'ok2', provider: 'apns', ref: 'r3' },
+    ], note)
+    expect(results).toHaveLength(3)
+    expect(results.map(r => r.status)).toEqual(['delivered', 'config', 'delivered'])
+    expect(results.map(r => r.ref)).toEqual(['r1', 'r2', 'r3'])
+    expect(results[1]!.error).toBe('ExpiredProviderToken')
   })
 
   it('retries a transient TooManyRequests then delivers', async () => {

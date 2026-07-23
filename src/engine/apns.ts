@@ -39,24 +39,27 @@ export class ApnsTransport {
   }
 
   async send(targets: PushTarget[], n: PushNotification): Promise<SendResult[]> {
-    return mapWithConcurrency(targets, CONCURRENCY, async (target) => {
-      const reasonOf = (e: unknown) => (e instanceof ApnsError ? e.reason : e instanceof Error ? e.message : String(e))
-      try {
+    return mapWithConcurrency(
+      targets,
+      CONCURRENCY,
+      async (target): Promise<SendResult> => {
         await retryTransient(
           () => this.client.send(this.notification(target, n)),
           (e) => e instanceof ApnsError && classifyApns(e.reason).kind === 'transient',
         )
         return { ref: target.ref, token: target.token, provider: 'apns', status: 'delivered' }
-      } catch (e) {
+      },
+      // Every per-target throw — classified provider error, network failure, or a future bug in
+      // the callback — becomes exactly one SendResult here. A config fault is reported as a
+      // `config` result, never a throw: loudness lives on the observability plane (see #11).
+      (target, e): SendResult => {
         const c = e instanceof ApnsError ? classifyApns(e.reason) : { kind: 'failed' as const }
-        const reason = reasonOf(e)
-        if (c.kind === 'config') throw e // fail-loud: deploy misconfiguration
+        const reason = e instanceof ApnsError ? e.reason : e instanceof Error ? e.message : String(e)
+        if (c.kind === 'config') return { ref: target.ref, token: target.token, provider: 'apns', status: 'config', error: reason }
         if (c.kind === 'invalid') return { ref: target.ref, token: target.token, provider: 'apns', status: 'invalid', error: reason }
         return { ref: target.ref, token: target.token, provider: 'apns', status: 'failed', retryable: c.kind === 'transient', error: reason }
-      }
-    // TEMPORARY (removed in the next task): rethrowing keeps today's fail-loud behavior byte-for-byte
-    // while the mapper's new required argument lands.
-    }, (_target, e): SendResult => { throw e })
+      },
+    )
   }
 
   async close(): Promise<void> {
