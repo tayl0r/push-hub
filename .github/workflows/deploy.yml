@@ -45,6 +45,7 @@ jobs:
           context: .
           push: true
           provenance: false
+          build-args: GIT_COMMIT=${{ github.sha }}
           tags: ghcr.io/tayl0r/push-hub:${{ env.IMAGE_TAG }}
 
       - name: Migrate and deploy
