@@ -27,7 +27,7 @@ const buildEngine = vi.fn((cfg: any) => {
 const registry = () => new TenantRegistry({ db, credKey, buildEngine })
 const apns = { keyId: 'K', teamId: 'T', bundleId: 'com.x.y', signingKey: 'sk', production: true }
 
-beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE tenants`); buildEngine.mockClear(); engines.length = 0; register.resetMetrics() })
+beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE tenants`); buildEngine.mockClear(); engines.length = 0 })
 afterAll(async () => { await client.end() })
 
 describe('TenantRegistry', () => {

@@ -3,7 +3,7 @@ import { collectDefaultMetrics, Counter, Gauge, Histogram, Registry } from 'prom
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 // Module-global, dedicated registry. Vitest re-instantiates this module per test file,
-// so cross-file metric state is a non-issue; within a file, tests call register.resetMetrics().
+// so cross-file metric state is a non-issue; within a file, a shared setupFiles hook (test/setup.ts) resets values before every test.
 export const register = new Registry()
 collectDefaultMetrics({ register }) // process CPU/mem/event-loop/GC
 
@@ -71,12 +71,35 @@ const httpRequestsInFlight = new Gauge({
 // but the count fns aren't known until index.ts has a db + registry.
 let sampledDeps: { tenantsCount: () => number; tokensCount: () => Promise<number> } | undefined
 
+// Registry.metrics() awaits every metric's collect() under ONE Promise.all, so a single
+// sampled collect that throws 500s the entire scrape and one that hangs stalls it
+// (process + RED metrics included). Every sampled collect must therefore swallow errors
+// and bound its wait, degrading to the gauge's previous value — never the whole payload.
+export const SCRAPE_SAMPLE_TIMEOUT_MS = 2000
+
+/** Race `promise` against a timeout. The loser is not cancelled, but both of its settle
+ * paths stay handled, so a late result or rejection is dropped without an unhandledRejection. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms)
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value) },
+      (err) => { clearTimeout(timer); reject(err) },
+    )
+  })
+}
+
 const tenantsGauge = new Gauge({
   name: 'tenants',
   help: 'Number of tenants currently loaded in the registry.',
   registers: [register],
   collect() {
-    if (sampledDeps) this.set(sampledDeps.tenantsCount())
+    if (!sampledDeps) return
+    try {
+      this.set(sampledDeps.tenantsCount())
+    } catch {
+      // Keep the previous value — see the Promise.all note above.
+    }
   },
 })
 const pushTokensGauge = new Gauge({
@@ -86,9 +109,9 @@ const pushTokensGauge = new Gauge({
   async collect() {
     if (!sampledDeps) return
     try {
-      this.set(await sampledDeps.tokensCount())
+      this.set(await withTimeout(sampledDeps.tokensCount(), SCRAPE_SAMPLE_TIMEOUT_MS))
     } catch {
-      // Leave the previous value on a transient DB error rather than blank the whole scrape.
+      // Transient DB error OR hung query: keep the previous value — see the note above.
     }
   },
 })
@@ -170,6 +193,12 @@ export function startMetricsServer(port: number): http.Server {
       return
     }
     res.writeHead(404).end()
+  })
+  // Metrics is a side-channel: a bind failure (e.g. EADDRINUSE) must degrade metrics —
+  // Prometheus's `up == 0` on this target is the alert — never crash the API. Without a
+  // listener, Node re-throws the 'error' emit as an uncaught exception and kills the process.
+  server.on('error', (err) => {
+    console.error(`metrics server error (port ${port}); metrics disabled:`, err)
   })
   server.listen(port, '0.0.0.0')
   return server

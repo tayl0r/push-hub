@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { once } from 'node:events'
+import http from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { register, recordSend, setBuildInfo, dbTimed, registerHttpMetrics, startMetricsServer, registerSampledGauges } from '../src/metrics.js'
+import { recordSend, setBuildInfo, dbTimed, registerHttpMetrics, startMetricsServer, registerSampledGauges, SCRAPE_SAMPLE_TIMEOUT_MS } from '../src/metrics.js'
 import { readSeries } from './helpers/metrics.js'
-
-beforeEach(() => { register.resetMetrics() })
 
 describe('recordSend', () => {
   it('counts push_sends_total by status and provider', async () => {
@@ -94,6 +93,26 @@ describe('startMetricsServer', () => {
       server.close()
     }
   })
+
+  it('logs and survives a bind failure instead of crashing the process', async () => {
+    const blocker = http.createServer(() => {})
+    blocker.listen(0, '0.0.0.0') // same wildcard address as startMetricsServer -> EADDRINUSE is deterministic cross-platform
+    await once(blocker, 'listening')
+    const { port } = blocker.address() as AddressInfo
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Deliberately NO test-side 'error' listener: attaching one would itself prevent the
+    // crash and make this test pass against unfixed code.
+    const server = startMetricsServer(port)
+    try {
+      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledOnce())
+      expect(server.listening).toBe(false)
+    } finally {
+      errorSpy.mockRestore()
+      server.close()
+      blocker.close()
+      await once(blocker, 'close')
+    }
+  })
 })
 
 describe('registerSampledGauges', () => {
@@ -112,5 +131,24 @@ describe('registerSampledGauges', () => {
     expect(await readSeries('push_tokens')).toBe(9)
     fail = true
     expect(await readSeries('push_tokens')).toBe(9) // retained: collect swallowed the error
+  })
+
+  it('degrades to the previous value when the count query hangs, instead of stalling the scrape', async () => {
+    vi.useFakeTimers()
+    try {
+      let hang = false
+      registerSampledGauges({
+        tenantsCount: () => 1,
+        tokensCount: () => (hang ? new Promise<number>(() => {}) : Promise.resolve(7)),
+      })
+      expect(await readSeries('push_tokens')).toBe(7)
+      hang = true
+      const read = readSeries('push_tokens') // starts collect(); withTimeout schedules its (fake) timer synchronously
+      await vi.advanceTimersByTimeAsync(SCRAPE_SAMPLE_TIMEOUT_MS)
+      expect(await read).toBe(7) // timed out -> previous value retained, scrape read settled (no hang)
+    } finally {
+      vi.useRealTimers()
+      registerSampledGauges({ tenantsCount: () => 0, tokensCount: async () => 0 }) // never leave a hanging dep behind for later full-registry scrapes
+    }
   })
 })

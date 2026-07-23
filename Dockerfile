@@ -15,7 +15,7 @@ COPY . .
 RUN pnpm build
 
 # GIT_COMMIT is set AFTER build so a changing SHA never busts the install/build cache layers.
-ARG GIT_COMMIT
+ARG GIT_COMMIT=unknown
 ENV GIT_COMMIT=$GIT_COMMIT
 
 EXPOSE 3000 9464

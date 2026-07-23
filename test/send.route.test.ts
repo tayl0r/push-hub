@@ -8,7 +8,6 @@ import { hashKey } from '../src/auth.js'
 import { sendRoutes } from '../src/routes/send.js'
 import { registerToken, tokensForUsers } from '../src/store.js'
 import type { TenantLookup } from '../src/registry.js'
-import { register } from '../src/metrics.js'
 import { readSeries } from './helpers/metrics.js'
 
 const client = postgres(process.env.TEST_DATABASE_URL!)
@@ -22,7 +21,7 @@ function app() {
   sendRoutes(a, { db, registry })
   return a
 }
-beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset(); register.resetMetrics() })
+beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })
 afterAll(async () => { await client.end() })
 
 async function inject(body: unknown) {

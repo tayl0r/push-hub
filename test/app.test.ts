@@ -5,7 +5,6 @@ import { sql } from 'drizzle-orm'
 import * as schema from '../src/db/schema.js'
 import { hashKey } from '../src/auth.js'
 import { buildApp } from '../src/app.js'
-import { register } from '../src/metrics.js'
 import { readSeries } from './helpers/metrics.js'
 import type { TenantRegistry } from '../src/registry.js'
 
@@ -17,7 +16,7 @@ const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
 // TenantRegistry for tenantRoutes, which these tests never exercise — so cast it.
 const registry = { byKeyHash: (h: string) => (h === tenant.apiKeyHash ? tenant : undefined) } as unknown as TenantRegistry
 
-beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset(); register.resetMetrics() })
+beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })
 afterAll(async () => { await client.end() })
 
 describe('buildApp', () => {
