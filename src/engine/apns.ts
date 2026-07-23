@@ -54,7 +54,9 @@ export class ApnsTransport {
         if (c.kind === 'invalid') return { ref: target.ref, token: target.token, provider: 'apns', status: 'invalid', error: reason }
         return { ref: target.ref, token: target.token, provider: 'apns', status: 'failed', retryable: c.kind === 'transient', error: reason }
       }
-    })
+    // TEMPORARY (removed in the next task): rethrowing keeps today's fail-loud behavior byte-for-byte
+    // while the mapper's new required argument lands.
+    }, (_target, e): SendResult => { throw e })
   }
 
   async close(): Promise<void> {

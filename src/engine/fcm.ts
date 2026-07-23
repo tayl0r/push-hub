@@ -78,7 +78,8 @@ export class FcmTransport {
         if (c.kind === 'invalid') return { ref: target.ref, token: target.token, provider: 'fcm', status: 'invalid', error: reason }
         return { ref: target.ref, token: target.token, provider: 'fcm', status: 'failed', retryable: c.kind === 'transient', error: reason }
       }
-    })
+    // TEMPORARY (removed in the next task): see the note in apns.ts.
+    }, (_target, e): SendResult => { throw e })
   }
 
   async close(): Promise<void> {
