@@ -1057,7 +1057,7 @@ Wires the boot-time calls. `version` comes from `package.json` via `createRequir
 - Consumes: `setBuildInfo`, `registerSampledGauges`, `startMetricsServer` (Tasks 1, 3); `countTokens` (Task 5); `env.METRICS_PORT`, `env.GIT_COMMIT` (Task 4); `registry.size` (existing).
 - Produces: nothing consumed by later tasks.
 
-- [ ] **Step 1: Write the implementation**
+- [x] **Step 1: Write the implementation**
 
 Replace the entire contents of `src/index.ts` with:
 ```ts
@@ -1094,17 +1094,17 @@ await app.listen({ port: env.PORT, host: '0.0.0.0' })
 console.log(`push-hub listening on ${env.PORT} (metrics on ${env.METRICS_PORT}) with ${registry.size} tenant(s)`)
 ```
 
-- [ ] **Step 2: Verify the build type-checks**
+- [x] **Step 2: Verify the build type-checks**
 
 Run: `pnpm build`
 Expected: `tsc` exits 0 with no output (clean compile; `dist/` is produced). `createRequire('../package.json')` is a runtime `require`, so no `resolveJsonModule` is needed.
 
-- [ ] **Step 3: Run the full unit-test suite (no DB env) to confirm nothing broke at import time**
+- [x] **Step 3: Run the full unit-test suite (no DB env) to confirm nothing broke at import time**
 
 Run: `pnpm exec vitest run test/metrics.test.ts test/env.test.ts`
 Expected: PASS. (These files don't need a DB; they confirm `metrics.ts` + `env.ts` still import cleanly after the wiring.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/index.ts
