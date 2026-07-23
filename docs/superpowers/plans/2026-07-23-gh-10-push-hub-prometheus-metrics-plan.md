@@ -1129,7 +1129,7 @@ Additive build/config changes: pass `GIT_COMMIT` into the image, expose `9464`, 
 - Consumes: `env.METRICS_PORT`/`GIT_COMMIT` (Task 4) at runtime.
 - Produces: nothing consumed by later tasks.
 
-- [ ] **Step 1: Dockerfile — GIT_COMMIT build arg + expose 9464**
+- [x] **Step 1: Dockerfile — GIT_COMMIT build arg + expose 9464**
 
 In `Dockerfile`, replace:
 ```dockerfile
@@ -1148,7 +1148,7 @@ ENV GIT_COMMIT=$GIT_COMMIT
 EXPOSE 3000 9464
 ```
 
-- [ ] **Step 2: deploy.yml — pass the SHA as a build arg**
+- [x] **Step 2: deploy.yml — pass the SHA as a build arg**
 
 In `.github/workflows/deploy.yml`, in the `Build and push image` step's `with:` block, add a `build-args` line above `tags`. Replace:
 ```yaml
@@ -1168,7 +1168,7 @@ with:
           tags: ghcr.io/tayl0r/push-hub:${{ env.IMAGE_TAG }}
 ```
 
-- [ ] **Step 3: .env.example — document the port**
+- [x] **Step 3: .env.example — document the port**
 
 In `.env.example`, replace the line:
 ```bash
@@ -1182,7 +1182,7 @@ PORT=3000
 METRICS_PORT=9464
 ```
 
-- [ ] **Step 4: docker-compose.yml — expose + labels + network name**
+- [x] **Step 4: docker-compose.yml — expose + labels + network name**
 
 Replace the entire contents of `docker-compose.yml` with:
 ```yaml
@@ -1213,7 +1213,7 @@ networks:
     external: true
 ```
 
-- [ ] **Step 5: Verify the compose file parses and renders the new discovery labels + network name**
+- [x] **Step 5: Verify the compose file parses and renders the new discovery labels + network name**
 
 Run (copies the file to the scratchpad with an empty `.env` so `docker compose config` can resolve `env_file:` without a real secrets file):
 ```bash
@@ -1224,7 +1224,7 @@ Expected: valid rendered YAML containing:
 - `labels:` with `prometheus.io/scrape: "true"` and `prometheus.io/port: "9464"`,
 - under `networks: internal:` → `name: apps_internal` and `external: true`.
 
-- [ ] **Step 6: Verify the Dockerfile / workflow / env edits landed**
+- [x] **Step 6: Verify the Dockerfile / workflow / env edits landed**
 
 Run:
 ```bash
@@ -1232,7 +1232,7 @@ grep -n 'ARG GIT_COMMIT' Dockerfile && grep -n 'EXPOSE 3000 9464' Dockerfile && 
 ```
 Expected: one matching line printed for each of the four greps (exit 0).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add Dockerfile .github/workflows/deploy.yml .env.example docker-compose.yml
@@ -1248,12 +1248,12 @@ EOF
 
 ## Final verification
 
-- [ ] **Full suite green.** With `TEST_DATABASE_URL` set to a reachable, migrated Postgres:
+- [x] **Full suite green.** With `TEST_DATABASE_URL` set to a reachable, migrated Postgres:
 
 Run: `pnpm test`
 Expected: all suites PASS (metrics, env, store, registry, app, send.route, plus the pre-existing auth/crypto/engine/tokens/tenants suites).
 
-- [ ] **Type/build clean.**
+- [x] **Type/build clean.**
 
 Run: `pnpm build`
 Expected: `tsc` exits 0, `dist/` produced.
