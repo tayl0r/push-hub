@@ -428,7 +428,7 @@ Same change for FCM: delete the throw site at `src/engine/fcm.ts:77` by moving t
 - Consumes: `SendStatus` including `'config'` (Task 1); `mapWithConcurrency(items, limit, fn, onError)` (Task 2).
 - Produces: `FcmTransport.send(targets: PushTarget[], n: PushNotification): Promise<SendResult[]>` — unchanged signature, never rejects for a per-target reason. Emits only `delivered | failed | invalid | config`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `test/engine/fcm.test.ts`, replace the whole `'401 UNAUTHENTICATED → throws (fail-loud config error)'` case with these four cases:
 
@@ -493,12 +493,12 @@ In `test/engine/fcm.test.ts`, replace the whole `'401 UNAUTHENTICATED → throws
 
 The `getAccessToken` mock is declared at `test/engine/fcm.test.ts:3` as `vi.fn(async () => ({ token: 'oauth-token' }))`; `clearMocks` (Task 1) clears its call history but keeps that default implementation, and `mockResolvedValueOnce` applies to a single call.
 
-- [ ] **Step 2: Run the FCM tests to verify they fail**
+- [x] **Step 2: Run the FCM tests to verify they fail**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/engine/fcm.test.ts`
 Expected: FAIL on all four new cases — each rejects (`UNAUTHENTICATED` / `PERMISSION_DENIED` / `no access token`) instead of resolving with a result.
 
-- [ ] **Step 3: Move the catch body into `onError` in `src/engine/fcm.ts`**
+- [x] **Step 3: Move the catch body into `onError` in `src/engine/fcm.ts`**
 
 Replace the whole `send` method — everything from the `async send(targets: PushTarget[], n: PushNotification)` line through the method's closing `}`, including the Task 2 shim — with:
 
@@ -544,12 +544,12 @@ Replace the whole `send` method — everything from the `async send(targets: Pus
 
 Do **not** change `accessToken()` (lines 31-36) or `body()` (lines 38-49) — `throw new FcmError({ kind: 'config' }, 'no access token')` stays exactly as it is.
 
-- [ ] **Step 4: Run the FCM tests to verify they pass**
+- [x] **Step 4: Run the FCM tests to verify they pass**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/engine/fcm.test.ts`
 Expected: PASS on every case, including the unchanged 404/UNREGISTERED-invalid, 400/INVALID_ARGUMENT-failed, the two 503 retry cases, and the 404-without-detail case.
 
-- [ ] **Step 5: Verify no shim survived, then build and run the full suite**
+- [x] **Step 5: Verify no shim survived, then build and run the full suite**
 
 Run: `cd /Users/taylor/dev/push-hub && git grep -n 'throw e' -- src/engine/fcm.ts`
 Expected: **no matches** (exit code 1) — both the old `config` throw site and the Task 2 shim are gone from this file. Scoped to `fcm.ts` on purpose: `src/engine/apns.ts` still matches if Task 3 has not run yet, and the `throw e` inside `retryTransient` in `src/engine/concurrency.ts` is legitimate and permanent (the retry-exhaustion path — do NOT "fix" it; removing it breaks transient-retry exhaustion).
@@ -557,7 +557,7 @@ Expected: **no matches** (exit code 1) — both the old `config` throw site and 
 Run: `cd /Users/taylor/dev/push-hub && pnpm build && pnpm test`
 Expected: build exits 0; all test files PASS. `test/engine/index.test.ts` still passes because it mocks both transport classes and its `apns-config-boom` mock rejects at the *transport* level, which Task 5 handles.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/taylor/dev/push-hub
