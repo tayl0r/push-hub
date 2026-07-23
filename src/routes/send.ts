@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/node'
 import { requireTenant } from '../auth.js'
 import type { TenantLookup } from '../registry.js'
 import { tokensForUsers, deleteByIds } from '../store.js'
+import { recordSend } from '../metrics.js'
 
 const sendBody = z.object({
   to: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
@@ -35,10 +36,13 @@ export function sendRoutes(app: FastifyInstance, deps: { db: any; registry: Tena
     try {
       results = await req.tenant.engine.send({ tokens: targets, notification: { title, body, data, badge, sound, priority } })
     } catch (err) {
+      for (const t of targets) recordSend('error', t.provider) // domain metric stays live when per-result counting goes blind
       req.log.error({ err }, 'push-hub: engine send failed (tenant misconfig?)')
       Sentry.captureException(err, { tags: { tenant: req.tenant.slug } })
       return reply.code(500).send({ error: 'send failed' })
     }
+
+    for (const r of results) recordSend(r.status, r.provider)
 
     const rowById = new Map<string | undefined, (typeof rows)[number]>(rows.map(r => [r.id, r]))
     // only delete rows this request actually fetched — deleteByIds is keyed by global PK, so never trust a ref the engine didn't get from us
