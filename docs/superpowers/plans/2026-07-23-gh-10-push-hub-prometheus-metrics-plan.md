@@ -946,7 +946,7 @@ Counts `push_sends_total` per engine `SendResult` on success, and — in the `ca
 - Consumes: `recordSend` (Task 1); `readSeries` from `test/helpers/metrics.ts` (Task 1).
 - Produces: no signature changes.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `test/send.route.test.ts`: add `import { register } from '../src/metrics.js'` and `import { readSeries } from './helpers/metrics.js'`, add `register.resetMetrics()` to `beforeEach`, add one new test, and modify the existing "500 when the engine throws" test.
 
@@ -990,12 +990,12 @@ with:
   })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/send.route.test.ts`
 Expected: FAIL — `push_sends_total` has no series (route doesn't call `recordSend` yet).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/routes/send.ts`:
 
@@ -1027,12 +1027,12 @@ Immediately after that `catch` block (before the `const rowById = ...` line), ad
     for (const r of results) recordSend(r.status, r.provider)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/send.route.test.ts`
 Expected: PASS (all send-route tests, including the new + modified ones).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/routes/send.ts test/send.route.test.ts
