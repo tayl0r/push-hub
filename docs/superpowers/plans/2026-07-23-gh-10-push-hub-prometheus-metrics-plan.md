@@ -564,7 +564,7 @@ EOF
 - Consumes: nothing.
 - Produces: `env.METRICS_PORT: number` (default `9464`), `env.GIT_COMMIT: string` (default `'unknown'`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/env.test.ts`, inside the `describe('env schema', ...)` block:
 ```ts
@@ -581,12 +581,12 @@ Append to `test/env.test.ts`, inside the `describe('env schema', ...)` block:
   })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/env.test.ts`
 Expected: FAIL — `parsed.METRICS_PORT` is `undefined` (expected `9464`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/env.ts`, add two fields to the `z.object({ ... })` schema (place after the `SENTRY_ENVIRONMENT` line):
 ```ts
@@ -594,12 +594,12 @@ In `src/env.ts`, add two fields to the `z.object({ ... })` schema (place after t
   GIT_COMMIT: z.string().default('unknown'),
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/env.test.ts`
 Expected: PASS (all env tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/env.ts test/env.test.ts
