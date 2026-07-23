@@ -416,7 +416,7 @@ Adds the bare `node:http` `/metrics` server and the async-`collect` gauges wired
   - `export function startMetricsServer(port: number): http.Server`
   - `export function registerSampledGauges(deps: { tenantsCount: () => number; tokensCount: () => Promise<number> }): void`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/metrics.test.ts` — add `startMetricsServer, registerSampledGauges` to the import from `../src/metrics.js`, add two more imports, then add the suites:
 ```ts
@@ -461,12 +461,12 @@ describe('registerSampledGauges', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/metrics.test.ts`
 Expected: FAIL — `startMetricsServer` / `registerSampledGauges` are not exported.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/metrics.ts`, add to the top import block:
 ```ts
@@ -535,12 +535,12 @@ export function registerSampledGauges(deps: {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/metrics.test.ts`
 Expected: PASS (10 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/metrics.ts test/metrics.test.ts
