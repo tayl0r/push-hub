@@ -264,7 +264,7 @@ Adds the RED metric instances and the four Fastify hooks. A single `settle(reque
 - Consumes: `register`, the metric-instance style from Task 1.
 - Produces: `export function registerHttpMetrics(app: FastifyInstance): void` — installs `onRequest`, `onResponse`, `onRequestAbort`, `onTimeout`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/metrics.test.ts` — add `registerHttpMetrics` to the existing import from `../src/metrics.js`, then add:
 ```ts
@@ -310,12 +310,12 @@ describe('registerHttpMetrics', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/metrics.test.ts`
 Expected: FAIL — `registerHttpMetrics` is not exported from `../src/metrics.js`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/metrics.ts`, add to the top import block:
 ```ts
@@ -383,12 +383,12 @@ export function registerHttpMetrics(app: FastifyInstance): void {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/metrics.test.ts`
 Expected: PASS (7 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/metrics.ts test/metrics.test.ts
