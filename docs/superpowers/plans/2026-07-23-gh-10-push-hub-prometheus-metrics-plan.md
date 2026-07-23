@@ -627,7 +627,7 @@ Wraps every token query call-site in `dbTimed` with its `DbOperation`, and adds 
 - Consumes: `dbTimed`, `DbOperation` (Task 1); `readSeries` from `test/helpers/metrics.ts` (Task 1).
 - Produces: `export async function countTokens(db: Db): Promise<number>`. Existing signatures (`registerToken`, `removeToken`, `tokensForUsers`, `deleteByIds`) are unchanged.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `test/store.test.ts`: add `countTokens` to the import from `../src/store.js`, add the metrics + helper imports, and add `register.resetMetrics()` to `beforeEach`. Concretely:
 
@@ -658,12 +658,12 @@ Add these tests inside `describe('token store', ...)`:
   })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run test/store.test.ts`
 Expected: FAIL — `countTokens` is not exported, and `db_query_duration_seconds_count` has no series (queries aren't wrapped yet).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Replace the entire contents of `src/store.ts` with:
 ```ts
@@ -683,7 +683,10 @@ export async function registerToken(db: Db, appSlug: string, userId: string, tok
 }
 
 export async function removeToken(db: Db, appSlug: string, token: string): Promise<number> {
-  const deleted = await dbTimed('remove_token', () =>
+  // dbTimed<any[]>: db is `any`, so without the explicit type arg T infers `unknown`
+  // and `deleted.length` fails tsc (TS18046). tokensForUsers doesn't need it — its
+  // return-type annotation contextually types T. See Task 5 review.
+  const deleted = await dbTimed<any[]>('remove_token', () =>
     db.delete(pushTokens)
       .where(and(eq(pushTokens.appSlug, appSlug), eq(pushTokens.token, token)))
       .returning())
@@ -712,7 +715,7 @@ export async function countTokens(db: Db): Promise<number> {
 }
 ```
 
-- [ ] **Step 4: Add the signpost comment in `db/client.ts`**
+- [x] **Step 4: Add the signpost comment in `db/client.ts`**
 
 In `src/db/client.ts`, add a comment on the line immediately above `export const db = drizzle(client, { schema })`:
 ```ts
@@ -720,12 +723,12 @@ In `src/db/client.ts`, add a comment on the line immediately above `export const
 export const db = drizzle(client, { schema })
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `pnpm exec vitest run test/store.test.ts`
 Expected: PASS (all store tests, including the two new ones).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/store.ts src/db/client.ts test/store.test.ts
