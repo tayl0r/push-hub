@@ -27,4 +27,16 @@ describe('env schema', () => {
   it('rejects a missing/blank enroll key', () => {
     expect(() => schema.parse({ ...base, PUSH_HUB_ENROLL_KEY: '' })).toThrow()
   })
+
+  it('defaults METRICS_PORT to 9464 and GIT_COMMIT to "unknown"', () => {
+    const parsed = schema.parse(base)
+    expect(parsed.METRICS_PORT).toBe(9464)
+    expect(parsed.GIT_COMMIT).toBe('unknown')
+  })
+
+  it('coerces METRICS_PORT from a string and reads GIT_COMMIT', () => {
+    const parsed = schema.parse({ ...base, METRICS_PORT: '9500', GIT_COMMIT: 'abc123' })
+    expect(parsed.METRICS_PORT).toBe(9500)
+    expect(parsed.GIT_COMMIT).toBe('abc123')
+  })
 })

@@ -8,6 +8,7 @@ import { hashKey } from '../src/auth.js'
 import { sendRoutes } from '../src/routes/send.js'
 import { registerToken, tokensForUsers } from '../src/store.js'
 import type { TenantLookup } from '../src/registry.js'
+import { readSeries } from './helpers/metrics.js'
 
 const client = postgres(process.env.TEST_DATABASE_URL!)
 const db = drizzle(client, { schema })
@@ -113,10 +114,25 @@ describe('POST /v1/send', () => {
     expect(engine.send).not.toHaveBeenCalled()
   })
 
-  it('500 when the engine throws (tenant misconfig)', async () => {
-    await registerToken(db, 'team-comm', 'u1', 't', 'ios')
+  it('counts push_sends_total by result status and provider on success', async () => {
+    await registerToken(db, 'team-comm', 'u1', 'ios-tok', 'ios')
+    await registerToken(db, 'team-comm', 'u1', 'and-tok', 'android')
+    engine.send.mockImplementation(async ({ tokens }: any) =>
+      tokens.map((t: any) => ({ ref: t.ref, token: t.token, provider: t.provider, status: 'delivered' })))
+
+    const res = await inject({ to: 'u1', title: 'x', body: 'y' })
+    expect(res.statusCode).toBe(200)
+    expect(await readSeries('push_sends_total', { status: 'delivered', provider: 'apns' })).toBe(1)
+    expect(await readSeries('push_sends_total', { status: 'delivered', provider: 'fcm' })).toBe(1)
+  })
+
+  it('500 when the engine throws, and counts one error per attempted target by provider', async () => {
+    await registerToken(db, 'team-comm', 'u1', 't-ios', 'ios')
+    await registerToken(db, 'team-comm', 'u1', 't-and', 'android')
     engine.send.mockRejectedValueOnce(new Error('bad .p8'))
     const res = await inject({ to: 'u1', title: 'x', body: 'y' })
     expect(res.statusCode).toBe(500)
+    expect(await readSeries('push_sends_total', { status: 'error', provider: 'apns' })).toBe(1)
+    expect(await readSeries('push_sends_total', { status: 'error', provider: 'fcm' })).toBe(1)
   })
 })

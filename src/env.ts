@@ -10,6 +10,8 @@ export const schema = z.object({
     .transform((s) => Buffer.from(s, 'hex')),
   GLITCHTIP_DSN: z.string().default(''),
   SENTRY_ENVIRONMENT: z.string().default('development'),
+  METRICS_PORT: z.coerce.number().default(9464),
+  GIT_COMMIT: z.string().default('unknown'),
 })
 
 export const env = schema.parse(process.env)

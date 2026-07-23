@@ -3,7 +3,8 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { sql } from 'drizzle-orm'
 import * as schema from '../src/db/schema.js'
-import { registerToken, removeToken, tokensForUsers, deleteByIds } from '../src/store.js'
+import { registerToken, removeToken, tokensForUsers, deleteByIds, countTokens } from '../src/store.js'
+import { readSeries } from './helpers/metrics.js'
 
 const client = postgres(process.env.TEST_DATABASE_URL!)
 const db = drizzle(client, { schema })
@@ -43,5 +44,19 @@ describe('token store', () => {
     const [row] = await tokensForUsers(db, 'team-comm', ['u1'])
     await deleteByIds(db, [row.id])
     expect((await tokensForUsers(db, 'team-comm', ['u1'])).length).toBe(1)
+  })
+
+  it('times a store query under its db operation label', async () => {
+    await registerToken(db, 'team-comm', 'u1', 't1', 'ios')
+    expect(await readSeries('db_query_duration_seconds_count', { operation: 'register_token' })).toBe(1)
+  })
+
+  it('countTokens returns the row count as a number', async () => {
+    await registerToken(db, 'team-comm', 'u1', 'a', 'ios')
+    await registerToken(db, 'team-comm', 'u1', 'b', 'ios')
+    await registerToken(db, 'team-comm', 'u2', 'c', 'android')
+    const n = await countTokens(db)
+    expect(n).toBe(3)
+    expect(typeof n).toBe('number')
   })
 })

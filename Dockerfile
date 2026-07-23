@@ -14,7 +14,11 @@ COPY . .
 
 RUN pnpm build
 
-EXPOSE 3000
+# GIT_COMMIT is set AFTER build so a changing SHA never busts the install/build cache layers.
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=$GIT_COMMIT
+
+EXPOSE 3000 9464
 
 # Single-stage on purpose: the deploy migrate step runs `pnpm db:migrate`
 # (tsx src/migrate.ts) against this same image, so devDependencies and src/
