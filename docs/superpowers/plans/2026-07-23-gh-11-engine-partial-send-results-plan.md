@@ -78,7 +78,7 @@ Pure enablers, no behavior change. The union must exist before any task can writ
 - Consumes: nothing.
 - Produces: `export type SendStatus = 'delivered' | 'failed' | 'invalid' | 'config' | 'unconfigured' | 'error'` in `src/engine/types.ts`. `SendResult` is unchanged: `{ ref?: string; token: string; provider: Provider; status: SendStatus; retryable?: boolean; error?: string }`. Every later task writes and compares these exact string literals.
 
-- [ ] **Step 1: Widen the union in `src/engine/types.ts`**
+- [x] **Step 1: Widen the union in `src/engine/types.ts`**
 
 Replace line 18 (`export type SendStatus = 'delivered' | 'failed' | 'invalid'`) with:
 
@@ -101,12 +101,12 @@ export type SendStatus = 'delivered' | 'failed' | 'invalid' | 'config' | 'unconf
 
 Leave `SendResult` (lines 20-27) exactly as it is.
 
-- [ ] **Step 2: Verify the widening is not a compile break**
+- [x] **Step 2: Verify the widening is not a compile break**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm build`
 Expected: exits 0, no output. (Every consumer in `src/` branches on equality, never on an exhaustive `switch` — the three consumer sites are `src/routes/send.ts:45`, `:49`, `:53-54`, and `recordSend` takes `status: string`.)
 
-- [ ] **Step 3: Add `clearMocks: true` to `vitest.config.ts`**
+- [x] **Step 3: Add `clearMocks: true` to `vitest.config.ts`**
 
 Replace the whole file with:
 
@@ -125,7 +125,7 @@ export default defineConfig({
 
 `clearMocks` clears call history only. Every existing `mockReset()` hook **stays** (`test/send.route.test.ts:24`, `test/app.test.ts:19`, `test/engine/apns.test.ts:43`) — only `mockReset` discards a persistent `mockImplementation` / `mockRejectedValue` left by a previous case.
 
-- [ ] **Step 4: Drop the two hooks `clearMocks` makes redundant**
+- [x] **Step 4: Drop the two hooks `clearMocks` makes redundant**
 
 In `test/engine/fcm.test.ts`, delete line 19 entirely:
 
@@ -153,12 +153,12 @@ import { describe, it, expect, vi } from 'vitest'
 
 Leave `test/registry.test.ts:30` and `test/tenants.route.test.ts:33` alone — those hooks also do DB `TRUNCATE`s.
 
-- [ ] **Step 5: Run the full suite to prove `clearMocks` changed no assertion**
+- [x] **Step 5: Run the full suite to prove `clearMocks` changed no assertion**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm test`
 Expected: PASS — the same test count as before this task, zero failures. In particular `test/engine/fcm.test.ts` and `test/engine/index.test.ts` still pass with their hooks removed, and `test/engine/apns.test.ts`'s retry tests (which assert `toHaveBeenCalledTimes(2)` / `(3)`) still pass because each reads calls made inside its own `it()`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/taylor/dev/push-hub
