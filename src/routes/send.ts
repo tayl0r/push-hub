@@ -54,39 +54,27 @@ export function sendRoutes(app: FastifyInstance, deps: { db: any; registry: Tena
 
     // One event per REQUEST, not per target: a 500-device fan-out on an expired .p8 must
     // produce one GlitchTip issue, not 500. No tokens, refs or user ids in any payload.
-    const configFailures = results.filter(r => r.status === 'config')
-    if (configFailures.length) {
-      const providers = distinct(configFailures.map(r => r.provider))
-      const reasons   = distinct(configFailures.map(r => r.error))
+    const reportFault = (status: 'config' | 'error', ErrorCls: new (message: string) => Error, noun: string, logMsg: string) => {
+      const failures = results.filter(r => r.status === status)
+      if (!failures.length) return
+      const providers = distinct(failures.map(r => r.provider))
+      const reasons   = distinct(failures.map(r => r.error))
       req.log.error(
-        { tenant: req.tenant.slug, providers, reasons, failed: configFailures.length, total: results.length },
-        'push-hub: provider configuration fault — tenant credentials need fixing',
+        { tenant: req.tenant.slug, providers, reasons, failed: failures.length, total: results.length },
+        logMsg,
       )
       Sentry.captureException(
-        new ProviderConfigError(`push: ${providers.join('+')} config fault (${reasons.join(', ')})`),
+        new ErrorCls(`push: ${providers.join('+')} ${noun} (${reasons.join(', ')})`),
         {
           tags:  { tenant: req.tenant.slug, providers: providers.join('+') },
-          extra: { failed: configFailures.length, total: results.length },
+          extra: { failed: failures.length, total: results.length },
         },
       )
     }
-
-    const defects = results.filter(r => r.status === 'error')
-    if (defects.length) {
-      const providers = distinct(defects.map(r => r.provider))
-      const reasons   = distinct(defects.map(r => r.error))
-      req.log.error(
-        { tenant: req.tenant.slug, providers, reasons, failed: defects.length, total: results.length },
-        'push-hub: transport defect — backstop produced error results (push-hub bug, not tenant config)',
-      )
-      Sentry.captureException(
-        new PushTransportDefect(`push: ${providers.join('+')} transport defect (${reasons.join(', ')})`),
-        {
-          tags:  { tenant: req.tenant.slug, providers: providers.join('+') },
-          extra: { failed: defects.length, total: results.length },
-        },
-      )
-    }
+    reportFault('config', ProviderConfigError, 'config fault',
+      'push-hub: provider configuration fault — tenant credentials need fixing')
+    reportFault('error', PushTransportDefect, 'transport defect',
+      'push-hub: transport defect — backstop produced error results (push-hub bug, not tenant config)')
 
     const unconfigured = results.filter(r => r.status === 'unconfigured')
     if (unconfigured.length) {

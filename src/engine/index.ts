@@ -12,7 +12,7 @@ export function createPushService(config: PushServiceConfig): PushService {
     targets.map(t => ({ ref: t.ref, token: t.token, provider: t.provider, status, error }))
 
   const runTransport = async (
-    transport: { send(t: PushTarget[], n: PushNotification): Promise<SendResult[]> } | null,
+    transport: ApnsTransport | FcmTransport | null,
     targets: PushTarget[],
     n: PushNotification,
   ): Promise<SendResult[]> => {

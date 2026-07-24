@@ -21,8 +21,15 @@ const engine = { send: vi.fn(), close: vi.fn() }
 const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
 const registry: TenantLookup = { byKeyHash: (h) => (h === tenant.apiKeyHash ? tenant : undefined) }
 
+// Stub satisfying Fastify v5's loggerInstance contract; child() returns itself so req.log
+// IS this object and the route's log calls land on these spies with raw, unserialized args.
+const log = {
+  info: vi.fn(), error: vi.fn(), debug: vi.fn(), fatal: vi.fn(), warn: vi.fn(), trace: vi.fn(),
+  child() { return log },
+}
+
 function app() {
-  const a = Fastify()
+  const a = Fastify({ loggerInstance: log })
   sendRoutes(a, { db, registry })
   return a
 }
@@ -194,6 +201,10 @@ describe('POST /v1/send', () => {
       tags: { tenant: 'team-comm', providers: 'apns' },
       extra: { failed: 2, total: 2 },
     })
+    expect(log.error).toHaveBeenCalledWith(
+      { tenant: 'team-comm', providers: ['apns'], reasons: ['ExpiredProviderToken'], failed: 2, total: 2 },
+      'push-hub: provider configuration fault — tenant credentials need fixing',
+    )
     expect(await readSeries('push_sends_total', { status: 'config', provider: 'apns' })).toBe(2)
   })
 
@@ -213,6 +224,10 @@ describe('POST /v1/send', () => {
       tags: { tenant: 'team-comm', providers: 'apns' },
       extra: { failed: 1, total: 1 },
     })
+    expect(log.error).toHaveBeenCalledWith(
+      { tenant: 'team-comm', providers: ['apns'], reasons: ['transport error: boom'], failed: 1, total: 1 },
+      'push-hub: transport defect — backstop produced error results (push-hub bug, not tenant config)',
+    )
     expect(await readSeries('push_sends_total', { status: 'error', provider: 'apns' })).toBe(1)
     // an `error` result is not `invalid` — the token survives
     expect(await tokensForUsers(db, 'team-comm', ['u1'])).toHaveLength(1)
@@ -235,6 +250,12 @@ describe('POST /v1/send', () => {
     // routine mid-rollout state: the token survives and holds no GlitchTip issue open
     expect((await tokensForUsers(db, 'team-comm', ['u1'])).map(r => r.token).sort()).toEqual(['and-tok', 'ios-tok'])
     expect(captureException).not.toHaveBeenCalled()
+    // the warn is the only signal for an unconfigured provider (no Sentry, by design)
+    expect(log.warn).toHaveBeenCalledTimes(1)
+    expect(log.warn).toHaveBeenCalledWith(
+      { tenant: 'team-comm', providers: ['fcm'], count: 1, total: 2 },
+      'push-hub: send targeted a provider this tenant has not configured',
+    )
   })
 
   it('reports nothing to Sentry on a clean send', async () => {
