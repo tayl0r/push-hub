@@ -15,7 +15,20 @@ export interface PushNotification {
   priority?: 'high' | 'normal' // default 'high'
 }
 
-export type SendStatus = 'delivered' | 'failed' | 'invalid'
+/**
+ * delivered    — the provider accepted the push for this token.
+ * failed       — transient or unknown per-token failure; keep the token, retry is the caller's call.
+ * invalid      — the token is dead; delete it.
+ * config       — the tenant's CONFIGURED provider credentials/topic are broken (expired .p8,
+ *                401/403, bad topic). Nothing is wrong with the token — never delete it — and
+ *                no retry helps until a human fixes the credentials. Operator-loud: this is an incident.
+ * unconfigured — the tenant has no credentials for this target's provider at all (routine, e.g.
+ *                Android tokens registered mid-rollout before FCM creds land). Keep the token.
+ *                Observable, never paged: a state, not an incident.
+ * error        — defect backstop only: a transport rejected instead of returning results.
+ *                Outcome unknown; keep the token. A push-hub bug, never a tenant problem.
+ */
+export type SendStatus = 'delivered' | 'failed' | 'invalid' | 'config' | 'unconfigured' | 'error'
 
 export interface SendResult {
   ref?: string

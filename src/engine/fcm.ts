@@ -49,36 +49,41 @@ export class FcmTransport {
   }
 
   async send(targets: PushTarget[], n: PushNotification): Promise<SendResult[]> {
-    return mapWithConcurrency(targets, CONCURRENCY, async (target) => {
-      const attempt = async () => {
-        const token = await this.accessToken()
-        const res = await fetch(this.endpoint, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: this.body(target, n),
-        })
-        if (res.ok) return
-        const payload = (await res.json().catch(() => ({}))) as {
-          error?: { status?: string; message?: string; details?: Array<{ '@type'?: string; errorCode?: string }> }
+    return mapWithConcurrency(
+      targets,
+      CONCURRENCY,
+      async (target): Promise<SendResult> => {
+        const attempt = async () => {
+          const token = await this.accessToken()
+          const res = await fetch(this.endpoint, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: this.body(target, n),
+          })
+          if (res.ok) return
+          const payload = (await res.json().catch(() => ({}))) as {
+            error?: { status?: string; message?: string; details?: Array<{ '@type'?: string; errorCode?: string }> }
+          }
+          // The FCM-specific code lives in details[].errorCode (@type …v1.FcmError), not error.status.
+          const detail = payload.error?.details?.find(
+            d => d['@type'] === 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
+          )
+          const fcmCode = detail?.errorCode ?? payload.error?.status
+          throw new FcmError(classifyFcm(res.status, fcmCode), fcmCode ?? `HTTP ${res.status}`)
         }
-        // The FCM-specific code lives in details[].errorCode (@type …v1.FcmError), not error.status.
-        const detail = payload.error?.details?.find(
-          d => d['@type'] === 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
-        )
-        const fcmCode = detail?.errorCode ?? payload.error?.status
-        throw new FcmError(classifyFcm(res.status, fcmCode), fcmCode ?? `HTTP ${res.status}`)
-      }
-      try {
         await retryTransient(attempt, (e) => e instanceof FcmError && e.classification.kind === 'transient')
         return { ref: target.ref, token: target.token, provider: 'fcm', status: 'delivered' }
-      } catch (e) {
+      },
+      // Every per-target throw becomes exactly one SendResult here — including accessToken()'s
+      // `no access token` FcmError, which is raised inside `attempt` and classified `config`.
+      (target, e): SendResult => {
         const c = e instanceof FcmError ? e.classification : { kind: 'failed' as const }
         const reason = e instanceof Error ? e.message : String(e)
-        if (c.kind === 'config') throw e // fail-loud: deploy misconfiguration
+        if (c.kind === 'config') return { ref: target.ref, token: target.token, provider: 'fcm', status: 'config', error: reason }
         if (c.kind === 'invalid') return { ref: target.ref, token: target.token, provider: 'fcm', status: 'invalid', error: reason }
         return { ref: target.ref, token: target.token, provider: 'fcm', status: 'failed', retryable: c.kind === 'transient', error: reason }
-      }
-    })
+      },
+    )
   }
 
   async close(): Promise<void> {

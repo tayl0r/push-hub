@@ -20,7 +20,7 @@ config table, see the [README](../README.md); this doc is the workflow around it
 │  mobile    │ ──────────────► │  your API    │ ─────────────────────────► │ push-service │
 │  client    │  POST /tokens   │  (stores it) │      push.send(...)        │  APNs / FCM  │
 └────────────┘                 └──────────────┘ ◄───────────────────────── └──────────────┘
-      ▲                              │  SendResult[]  (delivered/failed/invalid, echoing ref)
+      ▲                              │  SendResult[]  (delivered/failed/invalid/config/unconfigured/error, echoing ref)
       │ getDevicePushTokenAsync()    ▼
       │                         delete rows where status === 'invalid' (by ref)
 ```
@@ -133,30 +133,48 @@ async function sendPush(userIds: string[], notification: { title: string; body: 
   }))
   if (tokens.length === 0) return
 
-  // 3. Send — catch config-level throws (bad .p8 / service account) loudly.
+  // 3. Send — `send()` resolves one SendResult per target and never rejects for a per-token
+  //    reason. The catch below is a DEFECT backstop only (a bug in push-hub itself).
   let results
   try {
     results = await push.send({ tokens, notification })
   } catch (err) {
-    reportToErrorTracker(err) // deploy misconfig — fix creds, do NOT delete tokens
+    reportToErrorTracker(err) // push-hub defect — do NOT delete tokens
     return
   }
 
-  // 4. Delete dead tokens by ref; report (don't delete) transient/unknown failures.
+  // 4. Delete dead tokens by ref.
   const deadIds = results.filter(r => r.status === 'invalid' && r.ref).map(r => r.ref!)
   if (deadIds.length) await db.delete(pushTokens).where(inArray(pushTokens.id, deadIds))
+
+  // 5. Report the loud outcomes. `config` means YOUR credentials are broken — never the token.
+  const misconfigured = results.filter(r => r.status === 'config')
+  if (misconfigured.length) {
+    reportToErrorTracker(
+      new Error(`push: ${misconfigured.length}/${results.length} config faults`),
+      { reasons: [...new Set(misconfigured.map(r => r.error))] }, // no tokens, no user ids
+    )
+  }
 
   const failed = results.filter(r => r.status === 'failed')
   if (failed.length) reportToErrorTracker(new Error(`push: ${failed.length}/${results.length} failed`), { failed })
 }
 ```
 
-The three rules that make this correct-by-default:
+The five rules that make this correct-by-default:
 - **`invalid` → delete** (keyed by `ref`, never by re-matching the token string).
 - **`failed` → keep + log** (transient or unknown — deleting would be wrong).
-- **thrown error → report, don't touch tokens** (the whole integration is misconfigured, not one token).
+- **`config` → report loudly, keep the token, fix the credentials** (expired `.p8`, 401/403, bad topic — nothing is wrong with the token, and no retry helps until a human acts).
+- **`unconfigured` → keep the token, register the credentials when ready** (device tokens exist for a provider you hold no credentials for — a routine mid-rollout state, not an incident; don't page on it).
+- **`error` → the defect backstop fired: keep the token, report it as a bug** (a transport rejected instead of returning results, so this target's outcome is unknown — a push-hub problem, never a tenant one).
 
-If your sends are fire-and-forget (`sendPush(...).catch(...)`), remember the thrown config error is swallowed there — that's exactly why the reporting lives *inside* `sendPush`, not at the call sites.
+**Invariant:** `send()` resolves **one `SendResult` per input target** and **never rejects for a
+per-token reason**. A per-token provider fault — a credential fault included — can never discard a
+sibling target's outcome, in the same transport or the other one. The `try/catch` in step 3 is
+therefore only ever reached by a defect.
+
+If your sends are fire-and-forget (`sendPush(...).catch(...)`), the `config` reporting in step 5
+still runs inside `sendPush` — which is exactly why the reporting lives there and not at the call sites.
 
 ---
 
@@ -206,8 +224,8 @@ a two-phase ticket/receipt model; this library is explicit about all three. The 
 | Validate token | `Expo.isExpoPushToken(t)` | none — `provider` (from `platform`) determines routing |
 | Message shape | `{ to, title, body, data, sound, badge, priority }` | `notification: { title, body, data }` + per-target `{ token, provider, ref }` |
 | Batching | `chunkPushNotifications()` + loop | automatic (bounded concurrency internally) |
-| Send | `sendPushNotificationsAsync(chunk)` → tickets | `send({ tokens, notification })` → `SendResult[]` |
-| Dead-token signal | ticket/receipt `details.error === 'DeviceNotRegistered'` — often only in **receipts** you poll later | `result.status === 'invalid'` — returned **synchronously** from the same `send()` |
+| Send | `sendPushNotificationsAsync(chunk)` → tickets | `send({ tokens, notification })` → `SendResult[]` — exactly one per input target, never rejects for a per-token reason |
+| Dead-token signal | ticket/receipt `details.error === 'DeviceNotRegistered'` — often only in **receipts** you poll later | `result.status === 'invalid'` — returned **synchronously** from the same `send()`, and never confused with `config`/`unconfigured` (which must never delete a token) |
 | Retry | you implement | built-in bounded transient retry |
 | Result correlation | tickets index-aligned to messages | `ref` echoed on each result |
 | Priority | `priority: 'high'` per message | always high-priority alert (built in) |

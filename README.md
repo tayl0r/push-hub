@@ -70,6 +70,16 @@ user yields one ticket per device (all carrying the same `userId`). Any token a 
 reports dead is deleted server-side in the same request — callers never have to manage
 token lifecycle themselves.
 
+**Read the tickets, not the status code.** `/v1/send` returns `200` whenever push-hub produced
+a per-target outcome for the request — including when some targets failed. A provider
+configuration fault (expired `.p8`, revoked service account, bad topic) and a provider this
+tenant has not configured yet both come back as `200` with `error` tickets carrying the reason
+(`"ExpiredProviderToken"`, `"provider not configured"`), **not** a `500`; a fault on one provider
+never discards the other provider's delivered results, and dead tokens in the same batch are
+still cleaned up. Fix a configuration fault with `PUT /v1/tenant/credentials`. A `5xx` from `/v1/send`
+means push-hub itself failed (database unavailable, an unexpected engine defect) and
+carries no tickets at all.
+
 ## Configuration
 
 push-hub stores tenants in Postgres (provider credentials encrypted at rest), not in
