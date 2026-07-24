@@ -1134,18 +1134,18 @@ git commit -m "docs: describe the six-status send model and the one-result-per-t
 
 Verify each after Task 7. These are the design's own acceptance list — every one must hold.
 
-- [ ] A config-classified per-token error no longer throws out of `src/engine/apns.ts` / `src/engine/fcm.ts`; it maps to `SendResult { status: 'config' }` via the transports' `onError` mappers. (`git grep -n 'throw e' -- src/engine/ ':!src/engine/concurrency.ts'` returns nothing — the only `throw e` left anywhere in `src/engine/` is `retryTransient`'s legitimate retry-exhaustion rethrow in `concurrency.ts`, which this plan never touches.)
-- [ ] `mapWithConcurrency` requires an `onError(item, error) => R` mapper, never rejects when `onError` returns, and maps a throwing item to exactly one in-place result — proven by `test/engine/concurrency.test.ts`.
-- [ ] `engine.send()` resolves with exactly one result per input target on every path, including a transport-level rejection — proven by `test/engine/index.test.ts`'s `'resolves exactly one result per input target even when a transport rejects'`.
-- [ ] A config fault on one transport leaves the sibling transport's delivered results intact.
-- [ ] `/v1/send` returns `200` with a ticket for every attempted target, and runs `deleteByIds` for the `invalid` rows, when some targets fail for config reasons.
-- [ ] A `config` result never deletes a token.
-- [ ] The `config` fault is loud: `push_sends_total{status="config",provider}` per target, and exactly one Sentry `ProviderConfigError` per affected request.
-- [ ] A send to a provider the tenant has not configured is counted `unconfigured`, keeps the token, and produces no Sentry event.
-- [ ] `push_sends_total{status="config"}` can only be incremented by classifier-attributed credential faults — never by a missing provider (`unconfigured`) or a transport defect (`error`).
-- [ ] `test/send.route.test.ts`'s "500 when the engine throws" case is re-framed to the unexpected-rejection path and still passes; the new partial-results case passes.
-- [ ] `README.md` and `docs/engine-integration.md` describe the six-status model and the "never rejects for a per-token reason" invariant.
-- [ ] `pnpm build` and `pnpm test` are green.
+- [x] A config-classified per-token error no longer throws out of `src/engine/apns.ts` / `src/engine/fcm.ts`; it maps to `SendResult { status: 'config' }` via the transports' `onError` mappers. (`git grep -n 'throw e' -- src/engine/ ':!src/engine/concurrency.ts'` returns nothing — the only `throw e` left anywhere in `src/engine/` is `retryTransient`'s legitimate retry-exhaustion rethrow in `concurrency.ts`, which this plan never touches.)
+- [x] `mapWithConcurrency` requires an `onError(item, error) => R` mapper, never rejects when `onError` returns, and maps a throwing item to exactly one in-place result — proven by `test/engine/concurrency.test.ts`.
+- [x] `engine.send()` resolves with exactly one result per input target on every path, including a transport-level rejection — proven by `test/engine/index.test.ts`'s `'resolves exactly one result per input target even when a transport rejects'`.
+- [x] A config fault on one transport leaves the sibling transport's delivered results intact.
+- [x] `/v1/send` returns `200` with a ticket for every attempted target, and runs `deleteByIds` for the `invalid` rows, when some targets fail for config reasons.
+- [x] A `config` result never deletes a token.
+- [x] The `config` fault is loud: `push_sends_total{status="config",provider}` per target, and exactly one Sentry `ProviderConfigError` per affected request.
+- [x] A send to a provider the tenant has not configured is counted `unconfigured`, keeps the token, and produces no Sentry event.
+- [x] `push_sends_total{status="config"}` can only be incremented by classifier-attributed credential faults — never by a missing provider (`unconfigured`) or a transport defect (`error`).
+- [x] `test/send.route.test.ts`'s "500 when the engine throws" case is re-framed to the unexpected-rejection path and still passes; the new partial-results case passes.
+- [x] `README.md` and `docs/engine-integration.md` describe the six-status model and the "never rejects for a per-token reason" invariant.
+- [x] `pnpm build` and `pnpm test` are green.
 
 ## Out of scope (do not implement)
 
