@@ -579,7 +579,7 @@ git commit -m "feat(engine): FCM config faults return a config SendResult instea
 - Consumes: `SendStatus` including `'unconfigured'` and `'error'` (Task 1); `ApnsTransport` / `FcmTransport` `send()` which never reject for a per-target reason (Tasks 3, 4).
 - Produces: `createPushService(config: PushServiceConfig): PushService` where `send({ tokens, notification })` resolves with `SendResult[]` of exactly `tokens.length` entries, APNs results first then FCM results. `notConfigured` no longer exists; it is replaced by `synthesized(targets, status, error)`. **Emission split (an invariant later tasks and the alerting rules rely on):** `'unconfigured'` is produced *only* by the missing-transport branch, `'error'` *only* by the rejection backstop, and a transport's own results are never either.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `test/engine/index.test.ts`:
 
@@ -660,12 +660,12 @@ to:
 
 Leave the `'routes each target to its provider and preserves refs'`, `'echoes every input ref across a mixed-provider, mixed-outcome batch'` and both `close()` cases exactly as they are.
 
-- [ ] **Step 2: Run the orchestrator tests to verify they fail**
+- [x] **Step 2: Run the orchestrator tests to verify they fail**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/engine/index.test.ts`
 Expected: FAIL — the unconfigured case sees `status: 'failed'`, and both rejection cases reject with `Error: config: bad .p8 signing key` instead of resolving.
 
-- [ ] **Step 3: Implement `runTransport` in `src/engine/index.ts`**
+- [x] **Step 3: Implement `runTransport` in `src/engine/index.ts`**
 
 Replace the whole file with:
 
@@ -718,17 +718,17 @@ export function createPushService(config: PushServiceConfig): PushService {
 
 No empty-target guard is needed: `mapWithConcurrency` already returns `[]` for an empty input (its `Math.max(1, …)` clamp gives one worker whose `while (next < items.length)` loop never runs).
 
-- [ ] **Step 4: Run the orchestrator tests to verify they pass**
+- [x] **Step 4: Run the orchestrator tests to verify they pass**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/engine/index.test.ts`
 Expected: PASS on every case in the file.
 
-- [ ] **Step 5: Verify the build and the full suite**
+- [x] **Step 5: Verify the build and the full suite**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm build && pnpm test`
 Expected: build exits 0; every test file PASS. `test/send.route.test.ts`'s `'500 when the engine throws…'` case still passes — it mocks `engine.send` directly with `mockRejectedValueOnce`, so it exercises the route's own `catch`, not the engine.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/taylor/dev/push-hub
