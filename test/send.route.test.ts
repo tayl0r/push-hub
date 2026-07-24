@@ -190,7 +190,10 @@ describe('POST /v1/send', () => {
     expect(res.json().data).toHaveLength(2)
     expect(captureException).toHaveBeenCalledTimes(1) // one event for the request, not one per target
     expect(captureException.mock.calls[0][0].name).toBe('ProviderConfigError')
-    expect(captureException.mock.calls[0][1]).toMatchObject({ tags: { tenant: 'team-comm' } })
+    expect(captureException.mock.calls[0][1]).toMatchObject({
+      tags: { tenant: 'team-comm', providers: 'apns' },
+      extra: { failed: 2, total: 2 },
+    })
     expect(await readSeries('push_sends_total', { status: 'config', provider: 'apns' })).toBe(2)
   })
 
@@ -206,6 +209,10 @@ describe('POST /v1/send', () => {
     expect(res.json().data[0]).toEqual({ userId: 'u1', status: 'error', error: 'transport error: boom' })
     expect(captureException).toHaveBeenCalledTimes(1)
     expect(captureException.mock.calls[0][0].name).toBe('PushTransportDefect')
+    expect(captureException.mock.calls[0][1]).toMatchObject({
+      tags: { tenant: 'team-comm', providers: 'apns' },
+      extra: { failed: 1, total: 1 },
+    })
     expect(await readSeries('push_sends_total', { status: 'error', provider: 'apns' })).toBe(1)
     // an `error` result is not `invalid` — the token survives
     expect(await tokensForUsers(db, 'team-comm', ['u1'])).toHaveLength(1)
