@@ -750,7 +750,7 @@ The ticket-building and cleanup code needs **no change** (none of `config` / `un
 - Consumes: `SendResult.status` values `'config'`, `'unconfigured'`, `'error'` (Task 1), produced by the engine (Tasks 3-5).
 - Produces: no exported symbol. `ProviderConfigError` and `PushTransportDefect` are **module-private** (not exported — nothing outside this route constructs or catches them) and set `name` explicitly so GlitchTip groups them under the dedicated type. `distinct(values: (string | undefined)[]): string[]` is module-private, maps `undefined` → `'unknown'` and returns a sorted, de-duplicated array.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `test/send.route.test.ts`, add the hoisted Sentry mock immediately after the import block (after line 11, `import { readSeries } from './helpers/metrics.js'`):
 
@@ -879,12 +879,12 @@ Then add these four cases at the end of the `describe('POST /v1/send', …)` blo
 
 The zero-capture assertions are order-independent because `clearMocks: true` (Task 1) resets the module-scoped `captureException` history before every test.
 
-- [ ] **Step 2: Run the route tests to verify the new ones fail**
+- [x] **Step 2: Run the route tests to verify the new ones fail**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/send.route.test.ts`
 Expected: FAIL — `'reports exactly one ProviderConfigError per request…'` and `'reports a PushTransportDefect…'` fail with `expected "spy" to be called 1 times, but got 0 times` (the route does not capture on these paths yet). The `config`-partial and `unconfigured` cases may already pass (the ticket/cleanup/metric code is unchanged by design) — that is expected and fine; they are regression guards for the headline behavior.
 
-- [ ] **Step 3: Add the module-scope helpers to `src/routes/send.ts`**
+- [x] **Step 3: Add the module-scope helpers to `src/routes/send.ts`**
 
 Immediately after the `sendBody` schema (after line 17's closing `})`) and before `export function sendRoutes(...)`, insert:
 
@@ -898,7 +898,7 @@ const distinct = (values: (string | undefined)[]): string[] =>
   [...new Set(values.map(v => v ?? 'unknown'))].sort()
 ```
 
-- [ ] **Step 4: Add the three report blocks and fix the `catch` log string**
+- [x] **Step 4: Add the three report blocks and fix the `catch` log string**
 
 Change the existing `catch`-block log line from:
 
@@ -970,17 +970,17 @@ Then, immediately after `for (const r of results) recordSend(r.status, r.provide
 
 Do **not** touch `rowById`, `deleteByIds`, the `tickets` map, or the `reply.send`. They already do the right thing for all three new statuses.
 
-- [ ] **Step 5: Run the route tests to verify they pass**
+- [x] **Step 5: Run the route tests to verify they pass**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm vitest run test/send.route.test.ts`
 Expected: PASS on every case in the file, including the unchanged fan-out, invalid-cleanup, foreign-tenant and empty-user cases.
 
-- [ ] **Step 6: Verify the build and the full suite**
+- [x] **Step 6: Verify the build and the full suite**
 
 Run: `cd /Users/taylor/dev/push-hub && pnpm build && pnpm test`
 Expected: build exits 0; every test file PASS, zero failures.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/taylor/dev/push-hub
