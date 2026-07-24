@@ -1000,7 +1000,7 @@ git commit -m "feat(send): report config faults and transport defects once per r
 - Consumes: the final behavior from Tasks 1-6.
 - Produces: nothing consumed by code.
 
-- [ ] **Step 1: Update `README.md`**
+- [x] **Step 1: Update `README.md`**
 
 Immediately after the paragraph ending `token lifecycle themselves.` (line 71) and before the `## Configuration` heading, insert a blank line and then:
 
@@ -1016,7 +1016,7 @@ endpoint means push-hub itself failed (database unavailable, an unexpected engin
 carries no tickets at all.
 ```
 
-- [ ] **Step 2: Update the flow diagram legend in `docs/engine-integration.md`**
+- [x] **Step 2: Update the flow diagram legend in `docs/engine-integration.md`**
 
 Replace line 23:
 
@@ -1032,7 +1032,7 @@ with:
 
 Leave lines 19-22 and 24-26 untouched — line 23 sits below the boxes, so its length does not affect the box alignment.
 
-- [ ] **Step 3: Update the worked `sendPush` example**
+- [x] **Step 3: Update the worked `sendPush` example**
 
 Replace lines 136-151 (from the `// 3. Send …` comment through the closing `}` of `sendPush`) with:
 
@@ -1065,7 +1065,7 @@ Replace lines 136-151 (from the `// 3. Send …` comment through the closing `}`
 }
 ```
 
-- [ ] **Step 4: Replace the three rules with five, and add the invariant**
+- [x] **Step 4: Replace the three rules with five, and add the invariant**
 
 Replace the block from the line `The three rules that make this correct-by-default:` through the fire-and-forget paragraph (the one beginning `If your sends are fire-and-forget`) with:
 
@@ -1086,7 +1086,7 @@ If your sends are fire-and-forget (`sendPush(...).catch(...)`), the `config` rep
 still runs inside `sendPush` — which is exactly why the reporting lives there and not at the call sites.
 ```
 
-- [ ] **Step 5: Update the `expo-server-sdk` comparison rows**
+- [x] **Step 5: Update the `expo-server-sdk` comparison rows**
 
 Replace the `| Send |` comparison row:
 
@@ -1112,7 +1112,7 @@ with:
 | Dead-token signal | ticket/receipt `details.error === 'DeviceNotRegistered'` — often only in **receipts** you poll later | `result.status === 'invalid'` — returned **synchronously** from the same `send()`, and never confused with `config`/`unconfigured` (which must never delete a token) |
 ```
 
-- [ ] **Step 6: Verify the docs are consistent and nothing else is stale**
+- [x] **Step 6: Verify the docs are consistent and nothing else is stale**
 
 Run: `cd /Users/taylor/dev/push-hub && git grep -n "fail-loud\|delivered/failed/invalid,\|The three rules\|tenant misconfig" -- README.md docs/engine-integration.md src/`
 Expected: **no matches** (exit code 1). Every phrase is anchored on deleted text — in particular `delivered/failed/invalid,` (trailing comma included) matches only the OLD three-status legend; the new legend continues `…/invalid/config/…` and must not match. The pathspec names `docs/engine-integration.md` directly so the historical spec/plan files under `docs/superpowers/` (which legitimately quote the old phrases) are never scanned.
@@ -1120,7 +1120,7 @@ Expected: **no matches** (exit code 1). Every phrase is anchored on deleted text
 Run: `cd /Users/taylor/dev/push-hub && pnpm build && pnpm test`
 Expected: build exits 0; every test file PASS, zero failures.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/taylor/dev/push-hub

@@ -76,8 +76,8 @@ configuration fault (expired `.p8`, revoked service account, bad topic) and a pr
 tenant has not configured yet both come back as `200` with `error` tickets carrying the reason
 (`"ExpiredProviderToken"`, `"provider not configured"`), **not** a `500`; a fault on one provider
 never discards the other provider's delivered results, and dead tokens in the same batch are
-still cleaned up. Fix a configuration fault with `PUT /v1/tenant/credentials`. A `5xx` from this
-endpoint means push-hub itself failed (database unavailable, an unexpected engine defect) and
+still cleaned up. Fix a configuration fault with `PUT /v1/tenant/credentials`. A `5xx` from `/v1/send`
+means push-hub itself failed (database unavailable, an unexpected engine defect) and
 carries no tickets at all.
 
 ## Configuration
