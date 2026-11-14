@@ -7,8 +7,8 @@ on:
     branches: [main, prod]
   workflow_dispatch:
 
-# Workflow-level, so build and deploy queue as one. What a cancel does to a deploy: vps DEPLOY.md,
-# "One deploy at a time per deployment".
+# Workflow-level, so build and deploy run as one: a newer push waits for the running run instead of cancelling
+# it (GitHub keeps only the newest waiting run). What a cancel does: vps DEPLOY.md, "One deploy at a time per deployment".
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
