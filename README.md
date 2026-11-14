@@ -139,16 +139,21 @@ operator actions (`scripts/new-tenant-key.sh` + a container restart).
 
 ## Adopting push-hub in an app
 
-Apps on the same internal Docker network reach push-hub by DNS at `http://push-hub:3000`
-(or `http://push-hub-dev:3000` for dev) — it is not exposed publicly, and no separate
-service registry is needed. Keep it that way: `/v1/send` can push to any of a tenant's
-users, so only apps already on that network should reach it. An app off this host that
-needs it gets a route in the server's compose, not a change here.
+Apps on the server's `apps_internal` Docker network reach push-hub by DNS at
+`http://push-hub:3000` (or `http://push-hub-dev:3000` for dev), and no separate service
+registry is needed. push-hub isn't exposed to the public internet by default: `/v1/send`
+can push to any of a tenant's users, so only apps already on that network can reach it.
+If an app off the server needs to call push-hub directly, that takes a reverse-proxy
+route and a public domain in the deployment's server compose
+(`/opt/apps/push-hub{,-dev}/docker-compose.yml`), not a change here, and it puts every
+endpoint on the public internet.
 
 1. **Register the tenant** with the enroll key (see Configuration above) and put the
    returned `phk_…` key in the app's own `.env` / secret store.
-2. On the client, register each native device token via `POST /v1/tokens` once it is
-   available and again whenever it refreshes; on sign-out call `DELETE /v1/tokens`.
+2. The client sends each native device token to the app's own backend once it is
+   available and again whenever it refreshes. The backend registers it via
+   `POST /v1/tokens`, and on sign-out calls `DELETE /v1/tokens`. The `phk_…` key stays on
+   the backend: never ship it in a client.
 3. On the server, call `POST /v1/send` with the target `userId`(s) — push-hub fans out
    across that user's devices and cleans up dead tokens.
 
