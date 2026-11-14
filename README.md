@@ -155,7 +155,7 @@ endpoint on the public internet.
    `POST /v1/tokens`, and on sign-out calls `DELETE /v1/tokens`. The `phk_…` key stays on
    the backend: never ship it in a client.
 3. The backend calls `POST /v1/send` with the target `userId`(s) — push-hub fans out
-   across that user's devices and cleans up dead tokens.
+   across each user's devices and cleans up dead tokens.
 
 See the built-in engine's [integration guide](docs/engine-integration.md) for how native
 tokens and provider credentials work; push-hub moves the storage, fan-out, and cleanup
