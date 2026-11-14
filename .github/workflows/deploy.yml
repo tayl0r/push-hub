@@ -1,11 +1,7 @@
 name: Deploy
 
-# Build the image and push it to GHCR, then deploy it through the VPS deploy gate:
-#   main -> ghcr.io/tayl0r/push-hub:dev  (deployment push-hub-dev)
-#   prod -> ghcr.io/tayl0r/push-hub:prod (deployment push-hub)
-# The deploy job logs in with this app's own deploy key, which can only ask the server to redeploy
-# push-hub or push-hub-dev. The server picks the image from its own compose and runs the migration
-# the vps app manifest names for this app before starting it.
+# Build and push to GHCR, then deploy through the VPS deploy gate:
+#   main -> :dev (deployment push-hub-dev), prod -> :prod (deployment push-hub)
 on:
   push:
     branches: [main, prod]
