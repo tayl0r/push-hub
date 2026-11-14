@@ -1,70 +1,64 @@
 name: Deploy
 
-# Build the image, push it to GHCR, then deploy over SSH by delegating to the
-# fleet's shared /opt/apps/deploy.sh on the VPS (canonical copy: tayl0r/vps
-# deploy/app-deploy.sh) — one isolated GHCR login, a single retried pull, the
-# migrate, then `up -d --pull never` + image prune, all owned by that script.
-#   main -> ghcr.io/tayl0r/push-hub:dev  (deploy dir push-hub-dev)
-#   prod -> ghcr.io/tayl0r/push-hub:prod (deploy dir push-hub)
-# Host and SSH credentials are host-side config, supplied only as GitHub
-# Environment secrets (see the "dev" / "prod" environments in repo settings);
-# the per-env deploy dir is the plain DIR workflow env below.
+# Build and push to GHCR, then deploy through the VPS deploy gate:
+#   main -> :dev (deployment push-hub-dev), prod -> :prod (deployment push-hub)
 on:
   push:
     branches: [main, prod]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
-
+# Workflow-level, so build and deploy run as one: a newer push waits for the running run instead of cancelling
+# it (GitHub keeps only the newest waiting run). What a cancel does: vps DEPLOY.md, "One deploy at a time per deployment".
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
+    # Only main and prod build, whatever triggers are added later (a workflow_dispatch runs on any branch): the vps
+    # environment refuses other branches, so their image would sit on the tag undeployed for the next deploy to ship.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prod'   # full refs: a tag named main or prod doesn't match
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
-    env:
-      IMAGE_TAG: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
-      DIR: ${{ github.ref_name == 'prod' && 'push-hub' || 'push-hub-dev' }}
+    timeout-minutes: 30      # a hung build would otherwise block the deploy queue
+    permissions:
+      contents: read
+      packages: write
+    # Pinned by SHA: this job pushes the tag the gate deploys, so a re-pointed tag could ship a substituted
+    # image. Bump a pin only after reading its diff.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # the build needs no git token after checkout
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true
           provenance: false
           build-args: GIT_COMMIT=${{ github.sha }}
-          tags: ghcr.io/tayl0r/push-hub:${{ env.IMAGE_TAG }}
+          tags: ghcr.io/tayl0r/push-hub:${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
 
-      - name: Migrate and deploy
-        uses: appleboy/ssh-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          IMAGE: ghcr.io/tayl0r/push-hub:${{ env.IMAGE_TAG }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GITHUB_TOKEN,GITHUB_ACTOR,IMAGE,DIR
-          # Shared fleet deploy logic lives in /opt/apps/deploy.sh on the VPS
-          # (canonical copy: tayl0r/vps deploy/app-deploy.sh) — isolated GHCR
-          # login, single pull with retry, migrate, then `up -d --pull never`,
-          # then image prune. Args 3+ are this app's migrate command; the script
-          # runs it in the freshly pulled image (which carries devDeps + src/ —
-          # see Dockerfile) on the apps_internal network with /opt/apps/$DIR/.env.
-          script: |
-            export GITHUB_TOKEN GITHUB_ACTOR
-            /opt/apps/deploy.sh "$DIR" "$IMAGE" pnpm db:migrate
+  # The deploy key lives only in this reusable workflow, which a calling job can't add steps to. Give no other
+  # job `environment: vps`.
+  deploy:
+    needs: build
+    permissions:
+      contents: read
+      packages: read         # the server pulls the image with this run's token
+    uses: tayl0r/vps-deploy/.github/workflows/deploy.yml@61ad38c841556dbd1c2d9e743d9659d6591a1d2f # v2.0.0
+    with:
+      # The app's name in the vps app manifest (not always the repo's). From the branch, never a build-job
+      # output, which the build could set. A name outside this app's deployments is refused and pages.
+      target: ${{ github.ref_name == 'prod' && 'push-hub' || 'push-hub-dev' }}
+    secrets:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_DEPLOY_USER: ${{ secrets.VPS_DEPLOY_USER }}
+      VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
