@@ -92,6 +92,9 @@ env config. A running deployment needs two secrets beyond its database URL:
 
 See `.env.example` for the full set. There is no `PUSH_HUB_TENANTS` — tenants self-register.
 
+Each deployment's compose lives on the server at `/opt/apps/<dir>/docker-compose.yml` and is
+authoritative (vps `docs/adr/0002`).
+
 ### Registering a tenant (self-service)
 
 An agent provisioning an app registers it once with the enroll key:
