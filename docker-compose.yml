@@ -1,3 +1,5 @@
+# Reference copy. Each deployment (push-hub, push-hub-dev) runs the server's own copy of this file, and
+# deploys don't send this one, so a change here reaches the server only when the VPS admin installs it.
 services:
   push-hub:
     image: ghcr.io/tayl0r/push-hub:prod # use :dev in the dev deploy directory
