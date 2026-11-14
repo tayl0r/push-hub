@@ -141,7 +141,9 @@ operator actions (`scripts/new-tenant-key.sh` + a container restart).
 
 Apps on the same internal Docker network reach push-hub by DNS at `http://push-hub:3000`
 (or `http://push-hub-dev:3000` for dev) — it is not exposed publicly, and no separate
-service registry is needed.
+service registry is needed. Keep it that way: `/v1/send` can push to any of a tenant's
+users, so only apps already on that network should reach it. An app off this host that
+needs it gets a route in the server's compose, not a change here.
 
 1. **Register the tenant** with the enroll key (see Configuration above) and put the
    returned `phk_…` key in the app's own `.env` / secret store.
