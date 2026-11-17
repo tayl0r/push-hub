@@ -82,7 +82,7 @@ jobs:
           node-version: 22     # the Dockerfile's node:22; the repo has no .nvmrc
           # Only GitHub's runners restore the pnpm store from the cache: on a NAS runner it's slower than fetching.
           cache: ${{ runner.environment == 'github-hosted' && 'pnpm' || '' }}
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile   # re-checks every lockfile entry against the cooldown
       - run: pnpm verify
 
   build:
