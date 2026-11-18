@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import Fastify from 'fastify'
 import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
 import { sql } from 'drizzle-orm'
 import * as schema from '../src/db/schema.js'
+import { testClient } from './helpers/db.js'
 import { hashKey } from '../src/auth.js'
 import { sendRoutes } from '../src/routes/send.js'
 import { registerToken, tokensForUsers } from '../src/store.js'
@@ -15,7 +15,7 @@ import { readSeries } from './helpers/metrics.js'
 const captureException = vi.hoisted(() => vi.fn())
 vi.mock('@sentry/node', () => ({ captureException }))
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
+const client = testClient()
 const db = drizzle(client, { schema })
 const engine = { send: vi.fn(), close: vi.fn() }
 const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any

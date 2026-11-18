@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
 import { sql } from 'drizzle-orm'
 import * as schema from '../src/db/schema.js'
+import { testClient } from './helpers/db.js'
 import { hashKey } from '../src/auth.js'
 import { buildApp } from '../src/app.js'
 import { readSeries } from './helpers/metrics.js'
 import type { TenantRegistry } from '../src/registry.js'
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
+const client = testClient()
 const db = drizzle(client, { schema })
 const engine = { send: vi.fn(), close: vi.fn() }
 const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any

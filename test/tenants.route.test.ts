@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import Fastify from 'fastify'
 import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
 import { sql, eq } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import * as schema from '../src/db/schema.js'
+import { testClient } from './helpers/db.js'
 import { tenants } from '../src/db/schema.js'
 import { decrypt } from '../src/crypto.js'
 import { TenantRegistry } from '../src/registry.js'
 import { tenantRoutes } from '../src/routes/tenants.js'
 import { tokenRoutes } from '../src/routes/tokens.js'
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
+const client = testClient()
 const db = drizzle(client, { schema })
 const credKey = randomBytes(32)
 const ENROLL = 'enroll-secret'

@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
 import { sql } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import * as schema from '../src/db/schema.js'
+import { testClient } from './helpers/db.js'
 import { tenants } from '../src/db/schema.js'
 import { TenantRegistry, InvalidCreds, SlugTaken } from '../src/registry.js'
 import { hashKey } from '../src/auth.js'
 import { register } from '../src/metrics.js'
 import { readSeries } from './helpers/metrics.js'
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
+const client = testClient()
 const db = drizzle(client, { schema })
 const credKey = randomBytes(32)
 

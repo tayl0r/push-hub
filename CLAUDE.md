@@ -5,9 +5,10 @@
 **Local checks: `pnpm verify`.** It runs the TypeScript build (`tsc`) and the vitest suite. Run it before calling a PR ready: no workflow runs on pull requests. The deploy runs the same command before it builds, so a red check stops the deploy. Needs a test Postgres at `TEST_DATABASE_URL`, exported (vitest doesn't read `.env`), and the suite migrates it itself. A throwaway one on a random local port, which claims nothing in vps `port-map.md`:
 
 ```bash
-docker run -d --rm --name push-hub-test-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pushhub_test -p 127.0.0.1::5432 postgres:17
-until docker exec push-hub-test-pg pg_isready -h 127.0.0.1 -U postgres -d pushhub_test >/dev/null; do sleep 1; done
-TEST_DATABASE_URL=postgres://postgres:postgres@$(docker port push-hub-test-pg 5432/tcp)/pushhub_test pnpm verify
+pg=push-hub-test-pg-${PWD##*/}   # one per checkout, so parallel worktrees never share (and TRUNCATE) one DB
+docker run -d --rm --name $pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pushhub_test -p 127.0.0.1::5432 postgres:17
+until docker exec $pg pg_isready -h 127.0.0.1 -U postgres -d pushhub_test >/dev/null; do sleep 1; done
+TEST_DATABASE_URL=postgres://postgres:postgres@$(docker port $pg 5432/tcp)/pushhub_test pnpm verify
 ```
 
 ## Deploy & branch policy

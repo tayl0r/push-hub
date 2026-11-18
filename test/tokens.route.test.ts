@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import Fastify from 'fastify'
 import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
 import { sql } from 'drizzle-orm'
 import * as schema from '../src/db/schema.js'
+import { testClient } from './helpers/db.js'
 import { hashKey } from '../src/auth.js'
 import { tokensForUsers } from '../src/store.js'
 import { tokenRoutes } from '../src/routes/tokens.js'
 import type { Tenant, TenantLookup } from '../src/registry.js'
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
+const client = testClient()
 const db = drizzle(client, { schema })
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`) })
 afterAll(async () => { await client.end() })
