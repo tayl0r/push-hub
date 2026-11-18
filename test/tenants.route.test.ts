@@ -1,18 +1,15 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import Fastify from 'fastify'
-import { drizzle } from 'drizzle-orm/postgres-js'
 import { sql, eq } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
-import * as schema from '../src/db/schema.js'
-import { testClient } from './helpers/db.js'
 import { tenants } from '../src/db/schema.js'
 import { decrypt } from '../src/crypto.js'
 import { TenantRegistry } from '../src/registry.js'
 import { tenantRoutes } from '../src/routes/tenants.js'
 import { tokenRoutes } from '../src/routes/tokens.js'
+import { testDb } from './helpers/db.js'
 
-const client = testClient()
-const db = drizzle(client, { schema })
+const db = testDb()
 const credKey = randomBytes(32)
 const ENROLL = 'enroll-secret'
 const buildEngine = vi.fn(() => ({ send: vi.fn(), close: vi.fn(async () => {}) }))
@@ -31,7 +28,7 @@ const fcm = { projectId: 'p', clientEmail: 'e', privateKey: 'k' }
 const enroll = { authorization: `Bearer ${ENROLL}` }
 
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE tenants, push_tokens`); buildEngine.mockClear() })
-afterAll(async () => { await client.end() })
+afterAll(async () => { await db.$client.end() })
 
 describe('POST /v1/tenants', () => {
   it('registers with the enroll key; the returned key then authenticates on the data plane', async () => {

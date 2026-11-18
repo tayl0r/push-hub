@@ -1,15 +1,12 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
-import { drizzle } from 'drizzle-orm/postgres-js'
 import { sql } from 'drizzle-orm'
-import * as schema from '../src/db/schema.js'
-import { testClient } from './helpers/db.js'
 import { registerToken, removeToken, tokensForUsers, deleteByIds, countTokens } from '../src/store.js'
+import { testDb } from './helpers/db.js'
 import { readSeries } from './helpers/metrics.js'
 
-const client = testClient()
-const db = drizzle(client, { schema })
+const db = testDb()
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`) })
-afterAll(async () => { await client.end() })
+afterAll(async () => { await db.$client.end() })
 
 describe('token store', () => {
   it('registers, reassigns on token conflict, and lists per user (1→many, tenant-scoped)', async () => {
