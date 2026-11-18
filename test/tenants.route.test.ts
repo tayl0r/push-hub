@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Fastify from 'fastify'
 import { sql, eq } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
@@ -28,7 +28,6 @@ const fcm = { projectId: 'p', clientEmail: 'e', privateKey: 'k' }
 const enroll = { authorization: `Bearer ${ENROLL}` }
 
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE tenants, push_tokens`); buildEngine.mockClear() })
-afterAll(async () => { await db.$client.end() })
 
 describe('POST /v1/tenants', () => {
   it('registers with the enroll key; the returned key then authenticates on the data plane', async () => {

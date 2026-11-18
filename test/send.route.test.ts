@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Fastify from 'fastify'
 import { sql } from 'drizzle-orm'
 import { hashKey } from '../src/auth.js'
@@ -31,7 +31,6 @@ function app() {
   return a
 }
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })
-afterAll(async () => { await db.$client.end() })
 
 async function inject(body: unknown) {
   return app().inject({ method: 'POST', url: '/v1/send', headers: { authorization: 'Bearer key' }, payload: body })

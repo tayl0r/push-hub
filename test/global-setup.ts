@@ -2,7 +2,7 @@
 import { fileURLToPath } from 'node:url'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
-import { testClient } from './helpers/db.js'
+import { testClient } from './helpers/test-client.js'
 
 export default async function () {
   if (!process.env.TEST_DATABASE_URL) return

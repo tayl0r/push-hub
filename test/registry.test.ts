@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { sql } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import { tenants } from '../src/db/schema.js'
@@ -25,7 +25,6 @@ const registry = () => new TenantRegistry({ db, credKey, buildEngine })
 const apns = { keyId: 'K', teamId: 'T', bundleId: 'com.x.y', signingKey: 'sk', production: true }
 
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE tenants`); buildEngine.mockClear(); engines.length = 0 })
-afterAll(async () => { await db.$client.end() })
 
 describe('TenantRegistry', () => {
   it('register returns a phk_ key, inserts an encrypted row, and hot-adds to the map', async () => {

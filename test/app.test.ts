@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { sql } from 'drizzle-orm'
 import { hashKey } from '../src/auth.js'
 import { buildApp } from '../src/app.js'
@@ -14,7 +14,6 @@ const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
 const registry = { byKeyHash: (h: string) => (h === tenant.apiKeyHash ? tenant : undefined) } as unknown as TenantRegistry
 
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })
-afterAll(async () => { await db.$client.end() })
 
 describe('buildApp', () => {
   it('GET /health returns 200 { ok: true }', async () => {
