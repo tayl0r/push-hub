@@ -52,7 +52,6 @@ jobs:
     permissions:
       contents: read
     services:
-      # The DB suites run against it; test/global-setup.ts migrates it before they start.
       postgres:
         image: postgres:17     # prod's major (vps shared/docker-compose.yml)
         env:

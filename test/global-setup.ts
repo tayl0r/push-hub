@@ -1,6 +1,4 @@
-// test/global-setup.ts — migrate the test DB before any suite runs.
-// A no-op when TEST_DATABASE_URL is unset, so the unit suites run without Postgres; the DB suites then
-// fail on testClient()'s check.
+// No-op when TEST_DATABASE_URL is unset, so unit suites run without Postgres; DB suites then fail on testClient()'s check.
 import { fileURLToPath } from 'node:url'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
