@@ -1,13 +1,11 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Fastify from 'fastify'
-import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
 import { sql } from 'drizzle-orm'
-import * as schema from '../src/db/schema.js'
 import { hashKey } from '../src/auth.js'
 import { sendRoutes } from '../src/routes/send.js'
 import { registerToken, tokensForUsers } from '../src/store.js'
 import type { TenantLookup } from '../src/registry.js'
+import { testDb } from './helpers/db.js'
 import { readSeries } from './helpers/metrics.js'
 
 // The route captures to Sentry; without Sentry.init these are inert no-ops, so mock the module
@@ -15,8 +13,7 @@ import { readSeries } from './helpers/metrics.js'
 const captureException = vi.hoisted(() => vi.fn())
 vi.mock('@sentry/node', () => ({ captureException }))
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
-const db = drizzle(client, { schema })
+const db = testDb()
 const engine = { send: vi.fn(), close: vi.fn() }
 const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
 const registry: TenantLookup = { byKeyHash: (h) => (h === tenant.apiKeyHash ? tenant : undefined) }
@@ -34,7 +31,6 @@ function app() {
   return a
 }
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })
-afterAll(async () => { await client.end() })
 
 async function inject(body: unknown) {
   return app().inject({ method: 'POST', url: '/v1/send', headers: { authorization: 'Bearer key' }, payload: body })

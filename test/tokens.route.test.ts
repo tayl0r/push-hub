@@ -1,18 +1,14 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Fastify from 'fastify'
-import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
 import { sql } from 'drizzle-orm'
-import * as schema from '../src/db/schema.js'
 import { hashKey } from '../src/auth.js'
 import { tokensForUsers } from '../src/store.js'
 import { tokenRoutes } from '../src/routes/tokens.js'
 import type { Tenant, TenantLookup } from '../src/registry.js'
+import { testDb } from './helpers/db.js'
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
-const db = drizzle(client, { schema })
+const db = testDb()
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`) })
-afterAll(async () => { await client.end() })
 
 const tenant: Tenant = { slug: 'team-comm', apiKeyHash: hashKey('secret-key'), engine: { send: vi.fn(), close: vi.fn() } as any }
 const registry: TenantLookup = { byKeyHash: (h) => (h === tenant.apiKeyHash ? tenant : undefined) }

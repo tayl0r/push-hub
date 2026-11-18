@@ -1,15 +1,12 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
-import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { sql } from 'drizzle-orm'
-import * as schema from '../src/db/schema.js'
 import { hashKey } from '../src/auth.js'
 import { buildApp } from '../src/app.js'
+import { testDb } from './helpers/db.js'
 import { readSeries } from './helpers/metrics.js'
 import type { TenantRegistry } from '../src/registry.js'
 
-const client = postgres(process.env.TEST_DATABASE_URL!)
-const db = drizzle(client, { schema })
+const db = testDb()
 const engine = { send: vi.fn(), close: vi.fn() }
 const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
 // the tenant stub only needs byKeyHash for these data-plane tests; buildApp demands a
@@ -17,7 +14,6 @@ const tenant = { slug: 'team-comm', apiKeyHash: hashKey('key'), engine } as any
 const registry = { byKeyHash: (h: string) => (h === tenant.apiKeyHash ? tenant : undefined) } as unknown as TenantRegistry
 
 beforeEach(async () => { await db.execute(sql`TRUNCATE TABLE push_tokens`); engine.send.mockReset() })
-afterAll(async () => { await client.end() })
 
 describe('buildApp', () => {
   it('GET /health returns 200 { ok: true }', async () => {

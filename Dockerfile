@@ -1,3 +1,4 @@
+# Node major: keep it equal to .nvmrc, which deploy.yml's test job reads.
 FROM node:22-alpine
 
 WORKDIR /app
