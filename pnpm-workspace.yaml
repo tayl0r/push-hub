@@ -5,3 +5,6 @@
 # what that version matches.
 allowBuilds:
   esbuild: true
+
+# 7 days, in minutes: vps's DEPLOY.md (tayl0r/vps) § Dependency cooldown.
+minimumReleaseAge: 10080
