@@ -25,7 +25,7 @@ const require = createRequire(import.meta.url)
 const { version } = require('../package.json') as { version: string }
 setBuildInfo({ version, commit: env.GIT_COMMIT })
 registerSampledGauges({ tenantsCount: () => registry.size, tokensCount: () => countTokens(db) })
-startMetricsServer(env.METRICS_PORT)
+startMetricsServer(env.METRICS_PORT, '0.0.0.0')
 
 await app.listen({ port: env.PORT, host: '0.0.0.0' })
 console.log(`push-hub listening on ${env.PORT} (metrics on ${env.METRICS_PORT}) with ${registry.size} tenant(s)`)

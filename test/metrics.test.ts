@@ -80,14 +80,16 @@ describe('registerHttpMetrics', () => {
 
 describe('startMetricsServer', () => {
   it('serves GET /metrics and 404s everything else', async () => {
-    const server = startMetricsServer(0)
+    const host = '127.0.0.1'
+    const server = startMetricsServer(0, host)
     if (!server.listening) await once(server, 'listening')
-    const { port } = server.address() as AddressInfo
+    const { address, port } = server.address() as AddressInfo
     try {
-      const ok = await fetch(`http://127.0.0.1:${port}/metrics`)
+      expect(address).toBe(host)
+      const ok = await fetch(`http://${host}:${port}/metrics`)
       expect(ok.status).toBe(200)
       expect(ok.headers.get('content-type')).toContain('text/plain')
-      const other = await fetch(`http://127.0.0.1:${port}/nope`)
+      const other = await fetch(`http://${host}:${port}/nope`)
       expect(other.status).toBe(404)
     } finally {
       server.close()
@@ -102,7 +104,7 @@ describe('startMetricsServer', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     // Deliberately NO test-side 'error' listener: attaching one would itself prevent the
     // crash and make this test pass against unfixed code.
-    const server = startMetricsServer(port)
+    const server = startMetricsServer(port, '0.0.0.0')
     try {
       await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledOnce())
       expect(server.listening).toBe(false)

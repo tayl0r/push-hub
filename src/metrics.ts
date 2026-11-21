@@ -178,8 +178,8 @@ export function registerHttpMetrics(app: FastifyInstance): void {
   app.addHook('onTimeout', async (request) => { settle(request) })
 }
 
-/** Serve ONLY GET /metrics on a bare http server, bound 0.0.0.0. No Fastify, no router label. */
-export function startMetricsServer(port: number): http.Server {
+/** Serve ONLY GET /metrics on a bare http server at the supplied host. No Fastify, no router label. */
+export function startMetricsServer(port: number, host: string): http.Server {
   const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/metrics') {
       try {
@@ -200,7 +200,7 @@ export function startMetricsServer(port: number): http.Server {
   server.on('error', (err) => {
     console.error(`metrics server error (port ${port}); metrics disabled:`, err)
   })
-  server.listen(port, '0.0.0.0')
+  server.listen(port, host)
   return server
 }
 
