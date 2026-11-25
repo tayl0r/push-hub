@@ -79,4 +79,15 @@ describe('token routes', () => {
     const rows = await tokensForUsers(db, 'team-comm', ['u1'])
     expect(rows).toEqual([])
   })
+
+  it('DELETE /v1/tokens with a body missing token returns 400', async () => {
+    const res = await appWith().inject({
+      method: 'DELETE',
+      url: '/v1/tokens',
+      headers: { authorization: 'Bearer secret-key' },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toMatchObject({ error: 'invalid body', details: { fieldErrors: { token: expect.any(Array) } } })
+  })
 })
