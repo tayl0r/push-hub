@@ -19,7 +19,7 @@
   "dependencies": {
     "@sentry/node": "^10.0.0",
     "apns2": "^12.2.0",
-    "drizzle-orm": "^0.38.0",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^5.0.0",
     "google-auth-library": "^9.0.0",
     "postgres": "^3.4.0",
