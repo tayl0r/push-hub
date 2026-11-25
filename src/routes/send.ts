@@ -10,7 +10,7 @@ const sendBody = z.object({
   to: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
   title: z.string().optional(),
   body: z.string().optional(),
-  data: z.record(z.string()).optional(),
+  data: z.record(z.string(), z.string()).optional(),
   badge: z.number().int().optional(),
   sound: z.string().optional(),
   priority: z.enum(['high', 'normal']).optional(),

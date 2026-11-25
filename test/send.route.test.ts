@@ -51,7 +51,15 @@ describe('POST /v1/send', () => {
     // provider derived from platform:
     expect(call.tokens.map((t: any) => t.provider).sort()).toEqual(['apns', 'fcm'])
     // Expo-shaped message fields forwarded to the engine:
-    expect(call.notification).toMatchObject({ title: 'Hi', body: 'there', badge: 3, sound: 'default', priority: 'normal' })
+    expect(call.notification).toMatchObject({ title: 'Hi', body: 'there', data: { k: 'v' }, badge: 3, sound: 'default', priority: 'normal' })
+  })
+
+  it('400s a data map with a non-string value, before any send', async () => {
+    await registerToken(db, 'team-comm', 'u1', 'ios-tok', 'ios')
+    const res = await inject({ to: 'u1', data: { k: 1 } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().details.fieldErrors.data).toEqual(expect.arrayContaining([expect.any(String)]))
+    expect(engine.send).not.toHaveBeenCalled()
   })
 
   it('deletes invalid-token rows, keeps failed', async () => {
