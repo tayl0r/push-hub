@@ -42,7 +42,7 @@ describe('token routes', () => {
       payload: { userId: 'u1', platform: 'ios' },
     })
     expect(res.statusCode).toBe(400)
-    // the 400 body's shape is the API (zod's flattened error); its message strings are zod's and not pinned
+    // zod's message strings are deliberately not pinned
     expect(res.json()).toMatchObject({
       error: 'invalid body',
       details: { formErrors: [], fieldErrors: { token: expect.arrayContaining([expect.any(String)]) } },
