@@ -4,7 +4,7 @@ import type { ApnsConfig, FcmConfig } from '../engine/index.js'
 import { requireEnrollKey, requireTenant } from '../auth.js'
 import { TenantRegistry, InvalidCreds, SlugTaken } from '../registry.js'
 
-const provider = z.object({}).passthrough() // provider shape is validated by the engine at build time, not here
+const provider = z.looseObject({}) // provider shape is validated by the engine at build time, not here
 const providerFields = { apns: provider.optional(), fcm: provider.optional() }
 
 // RFC 1123 / DNS-1123 label (as Kubernetes enforces): lowercase alphanumeric + internal
@@ -24,7 +24,7 @@ const credsBody = z.object({ ...providerFields })
 export function tenantRoutes(app: FastifyInstance, deps: { registry: TenantRegistry; enrollKey: string }) {
   app.post('/v1/tenants', { preHandler: requireEnrollKey(deps.enrollKey) }, async (req, reply) => {
     const parsed = registerBody.safeParse(req.body)
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: parsed.error.flatten() })
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: z.flattenError(parsed.error) })
     try {
       const { slug, apiKey } = await deps.registry.register({
         slug: parsed.data.slug,
@@ -41,7 +41,7 @@ export function tenantRoutes(app: FastifyInstance, deps: { registry: TenantRegis
 
   app.put('/v1/tenant/credentials', { preHandler: requireTenant(deps.registry) }, async (req, reply) => {
     const parsed = credsBody.safeParse(req.body)
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: parsed.error.flatten() })
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: z.flattenError(parsed.error) })
     try {
       await deps.registry.updateCredentials(req.tenant, {
         apns: parsed.data.apns as ApnsConfig | undefined,

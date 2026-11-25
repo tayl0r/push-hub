@@ -27,7 +27,7 @@ const distinct = (values: (string | undefined)[]): string[] =>
 export function sendRoutes(app: FastifyInstance, deps: { db: any; registry: TenantLookup }) {
   app.post('/v1/send', { preHandler: requireTenant(deps.registry) }, async (req, reply) => {
     const parsed = sendBody.safeParse(req.body)
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: parsed.error.flatten() })
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: z.flattenError(parsed.error) })
     const { to, title, body, data, badge, sound, priority } = parsed.data
     const userIds = Array.isArray(to) ? to : [to]
 

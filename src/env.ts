@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const schema = z.object({
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
   PORT: z.coerce.number().default(3000),
   PUSH_HUB_ENROLL_KEY: z.string().min(1),
   PUSH_HUB_CRED_KEY: z
