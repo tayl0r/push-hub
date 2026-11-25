@@ -91,6 +91,7 @@ describe('POST /v1/tenants — slug validation (RFC 1123 / DNS-1123 label)', () 
     const app = await appWith()
     const res = await app.inject({ method: 'POST', url: '/v1/tenants', headers: enroll, payload: { slug, apns } })
     expect(res.statusCode).toBe(400)
+    expect(res.json()).toMatchObject({ error: 'invalid body', details: { fieldErrors: { slug: expect.any(Array) } } })
     const rows = await db.select().from(tenants)
     expect(rows.length).toBe(0) // the registry was never called — rejected by zod before it could write
   })
@@ -132,6 +133,14 @@ describe('PUT /v1/tenant/credentials', () => {
     const apiKey = await register(app, 'team-comm', { apns })
     const res = await app.inject({ method: 'PUT', url: '/v1/tenant/credentials', headers: { authorization: `Bearer ${apiKey}` }, payload: {} })
     expect(res.statusCode).toBe(400) // updateCredentials → buildOrThrow rejects zero providers → InvalidCreds → 400
+  })
+
+  it('400s a provider that is not an object, before any update', async () => {
+    const app = await appWith()
+    const apiKey = await register(app, 'team-comm', { apns })
+    const res = await app.inject({ method: 'PUT', url: '/v1/tenant/credentials', headers: { authorization: `Bearer ${apiKey}` }, payload: { apns: 'x' } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toMatchObject({ error: 'invalid body', details: { fieldErrors: { apns: expect.any(Array) } } })
   })
 
   it('401 with a wrong or missing tenant key', async () => {

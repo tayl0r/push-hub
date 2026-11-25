@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import * as Sentry from '@sentry/node'
 import { requireTenant } from '../auth.js'
+import { invalidBody } from './invalid-body.js'
 import type { TenantLookup } from '../registry.js'
 import { tokensForUsers, deleteByIds } from '../store.js'
 import { recordSend } from '../metrics.js'
@@ -10,7 +11,7 @@ const sendBody = z.object({
   to: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
   title: z.string().optional(),
   body: z.string().optional(),
-  data: z.record(z.string()).optional(),
+  data: z.record(z.string(), z.string()).optional(),
   badge: z.number().int().optional(),
   sound: z.string().optional(),
   priority: z.enum(['high', 'normal']).optional(),
@@ -27,7 +28,7 @@ const distinct = (values: (string | undefined)[]): string[] =>
 export function sendRoutes(app: FastifyInstance, deps: { db: any; registry: TenantLookup }) {
   app.post('/v1/send', { preHandler: requireTenant(deps.registry) }, async (req, reply) => {
     const parsed = sendBody.safeParse(req.body)
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid body', details: parsed.error.flatten() })
+    if (!parsed.success) return invalidBody(reply, parsed.error)
     const { to, title, body, data, badge, sound, priority } = parsed.data
     const userIds = Array.isArray(to) ? to : [to]
 

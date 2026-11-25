@@ -24,6 +24,10 @@ describe('env schema', () => {
     expect(() => schema.parse({ ...base, PUSH_HUB_CRED_KEY: 'abc' })).toThrow()
   })
 
+  it('rejects a DATABASE_URL that is not a URL', () => {
+    expect(() => schema.parse({ ...base, DATABASE_URL: 'not a url' })).toThrow()
+  })
+
   it('rejects a missing/blank enroll key', () => {
     expect(() => schema.parse({ ...base, PUSH_HUB_ENROLL_KEY: '' })).toThrow()
   })
